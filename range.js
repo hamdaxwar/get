@@ -66,7 +66,7 @@ const saveToInlineJson = (rangeVal, countryName, service) => {
         });
 
         // Simpan maksimal 10 data terbaru
-        if (dataList.length > 10) dataList = dataList.slice(-10);
+        if (dataList.length > 15) dataList = dataList.slice(-15);
         
         fs.writeFileSync(INLINE_JSON_PATH, JSON.stringify(dataList, null, 2), 'utf-8');
     } catch (e) { 
@@ -128,14 +128,14 @@ async function startMonitor() {
     const checkState = setInterval(() => {
         if (state.browser) {
             clearInterval(checkState);
-            console.log(`✅ [RANGE] Browser terdeteksi. Menunggu ${CONFIG.ATTACH_DELAY / 1000} detik sebelum menempel...`);
+            console.log(`✅ [RANGE] Browser terdeteksi. Menunggu ${CONFIG.ATTACH_DELAY / 5000} detik sebelum menempel...`);
             
             // Jeda 5 detik sebelum membuka tab monitoring
             setTimeout(() => {
                 runMonitoringLoop();
             }, CONFIG.ATTACH_DELAY);
         }
-    }, 2000);
+    }, 5000);
 
     async function runMonitoringLoop() {
         let monitorPage = null;
