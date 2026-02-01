@@ -4,7 +4,6 @@ const path = require('path');
 const { state } = require('./helpers/state');
 
 // ================= KONFIGURASI =================
-// Pastikan Bot Token dan Chat ID ini sudah benar dan Bot sudah jadi Admin di grup
 const BOT_TOKEN = "7562117237:AAFQnb5aCmeSHHi_qAJz3vkoX4HbNGohe38";
 const CHAT_ID = "-1003492226491"; 
 const ADMIN_ID = "7184123643";
@@ -23,6 +22,17 @@ const startTime = Date.now();
 let monitorPage = null;
 
 // ================= UTILS =================
+
+// Fungsi untuk mengamankan karakter HTML agar tidak dianggap blokir/error oleh Telegram
+function escapeHtml(text) {
+    if (!text) return "";
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
 
 function getCountryEmoji(country) {
     return COUNTRY_EMOJI[country?.trim().toUpperCase()] || "🏴‍☠️";
@@ -103,14 +113,13 @@ async function sendTelegram(text, otpCode = null, targetChat = CHAT_ID) {
     try {
         const res = await axios.post(url, payload);
         if (res.data.ok) {
-            console.log(`✅ [SUCCESS] Telegram sent to ${targetChat}`);
+            console.log(`✅ [SUCCESS] Telegram terkirim ke ${targetChat}`);
         }
     } catch (e) {
-        // Logging error lebih detail untuk debugging
         if (e.response) {
             console.error(`❌ [TG ERROR] Status: ${e.response.status} - Data: ${JSON.stringify(e.response.data)}`);
         } else {
-            console.error(`❌ [TG ERROR] Connection failed: ${e.message}`);
+            console.error(`❌ [TG ERROR] Koneksi gagal: ${e.message}`);
         }
     }
 }
@@ -184,7 +193,6 @@ async function startSmsMonitor() {
                     await monitorPage.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
                 }
 
-                // Ambil data langsung dari API dashboard
                 const responsePromise = monitorPage.waitForResponse(r => r.url().includes("/getnum/info"), { timeout: 5000 }).catch(() => null);
                 await monitorPage.click('th:has-text("Number Info")', { timeout: 1000 }).catch(() => {});
                 
@@ -201,11 +209,9 @@ async function startSmsMonitor() {
                             const cache = getCache();
 
                             if (otp && !cache[key]) {
-                                // PENTING: Update cache SEBELUM kirim untuk mencegah spam jika proses kirim lambat
                                 cache[key] = { t: new Date().toISOString() };
                                 saveToCache(cache);
 
-                                // Simpan ke smc.json di Root
                                 const entry = {
                                     service: item.full_number || "Service",
                                     number: phone,
@@ -221,10 +227,12 @@ async function startSmsMonitor() {
                                 existing.push(entry);
                                 fs.writeFileSync(SMC_JSON_FILE, JSON.stringify(existing.slice(-100), null, 2));
 
-                                // Kirim Telegram seketika
                                 const user = getUserData(phone);
                                 const userTag = user.username !== "unknown" ? `@${user.username}` : "unknown";
                                 const emoji = getCountryEmoji(item.country || "");
+                                
+                                // Gunakan escapeHtml pada isi pesan agar karakter <#> tidak membuat pesan diblokir
+                                const safeFullMessage = escapeHtml(item.message);
                                 
                                 const msg = `💭 <b>New Message Received</b>\n\n` +
                                             `<b>👤 User:</b> ${userTag}\n` +
@@ -233,9 +241,8 @@ async function startSmsMonitor() {
                                             `<b>✅ Service:</b> <b>${item.full_number || "N/A"}</b>\n\n` +
                                             `🔐 OTP: <code>${otp}</code>\n\n` +
                                             `<b>FULL MESSAGE:</b>\n` +
-                                            `<blockquote>${item.message}</blockquote>`;
+                                            `<blockquote>${safeFullMessage}</blockquote>`;
                                 
-                                // Memanggil fungsi kirim
                                 await sendTelegram(msg, otp);
                                 totalSent++;
                             }
