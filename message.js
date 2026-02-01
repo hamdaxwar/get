@@ -10,18 +10,6 @@ const ADMIN_ID = "7184123643";
 const TELEGRAM_BOT_LINK = "https://t.me/myzuraisgoodbot";
 const TELEGRAM_ADMIN_LINK = "https://t.me/Imr1d";
 
-const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
-const { state } = require('./helpers/state');
-
-// ================= KONFIGURASI =================
-const BOT_TOKEN = "7562117237:AAFQnb5aCmeSHHi_qAJz3vkoX4HbNGohe38";
-const CHAT_ID = "-1003492226491"; 
-const ADMIN_ID = "7184123643";
-const TELEGRAM_BOT_LINK = "https://t.me/myzuraisgoodbot";
-const TELEGRAM_ADMIN_LINK = "https://t.me/Imr1d";
-
 const DASHBOARD_URL = "https://stexsms.com/mdashboard/getnum";
 const SMC_JSON_FILE = path.join(__dirname, "smc.json");
 const WAIT_JSON_FILE = path.join(__dirname, "wait.json");
