@@ -4,8 +4,9 @@ const path = require('path');
 const { state } = require('./helpers/state');
 
 // ================= KONFIGURASI =================
+// Pastikan Bot Token dan Chat ID ini sudah benar dan Bot sudah jadi Admin di grup
 const BOT_TOKEN = "7562117237:AAFQnb5aCmeSHHi_qAJz3vkoX4HbNGohe38";
-const CHAT_ID = "-1003492226491";
+const CHAT_ID = "-1003492226491"; 
 const ADMIN_ID = "7184123643";
 const TELEGRAM_BOT_LINK = "https://t.me/myzuraisgoodbot";
 const TELEGRAM_ADMIN_LINK = "https://t.me/Imr1d";
@@ -100,9 +101,17 @@ async function sendTelegram(text, otpCode = null, targetChat = CHAT_ID) {
     }
 
     try {
-        await axios.post(url, payload);
+        const res = await axios.post(url, payload);
+        if (res.data.ok) {
+            console.log(`✅ [SUCCESS] Telegram sent to ${targetChat}`);
+        }
     } catch (e) {
-        console.error(`❌ [TG] Error: ${e.message}`);
+        // Logging error lebih detail untuk debugging
+        if (e.response) {
+            console.error(`❌ [TG ERROR] Status: ${e.response.status} - Data: ${JSON.stringify(e.response.data)}`);
+        } else {
+            console.error(`❌ [TG ERROR] Connection failed: ${e.message}`);
+        }
     }
 }
 
@@ -192,6 +201,7 @@ async function startSmsMonitor() {
                             const cache = getCache();
 
                             if (otp && !cache[key]) {
+                                // PENTING: Update cache SEBELUM kirim untuk mencegah spam jika proses kirim lambat
                                 cache[key] = { t: new Date().toISOString() };
                                 saveToCache(cache);
 
@@ -225,6 +235,7 @@ async function startSmsMonitor() {
                                             `<b>FULL MESSAGE:</b>\n` +
                                             `<blockquote>${item.message}</blockquote>`;
                                 
+                                // Memanggil fungsi kirim
                                 await sendTelegram(msg, otp);
                                 totalSent++;
                             }
@@ -232,11 +243,11 @@ async function startSmsMonitor() {
                     }
                 }
             } catch (e) {
-                console.error("❌ [MESSAGE] Error:", e.message);
+                console.error("❌ [MESSAGE] Error Utama:", e.message);
             }
-            // Tetap cek command admin (/status, /refresh)
+            
             await checkTelegramCommands();
-            await new Promise(r => setTimeout(r, 10000)); // Refresh setiap 10 detik
+            await new Promise(r => setTimeout(r, 10000));
         }
     }
 }
