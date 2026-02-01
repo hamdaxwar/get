@@ -1,7 +1,7 @@
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-// Import state yang sama dengan yang digunakan di scraper.js
+// Menggunakan state yang sama dengan scraper.js agar sinkron
 const { state } = require('./helpers/state'); 
 
 // ==================== KONFIGURASI ====================
@@ -10,7 +10,8 @@ const CONFIG = {
     CHAT_ID: "-1003358198353",
     DASHBOARD_URL: "https://stexsms.com/mdashboard/console",
     ALLOWED_SERVICES: ['whatsapp', 'facebook'],
-    BANNED_COUNTRIES: ['angola']
+    BANNED_COUNTRIES: ['angola'],
+    ATTACH_DELAY: 5000 // Jeda 5 detik sebelum buka target URL
 };
 
 let SENT_MESSAGES = new Map();
@@ -112,12 +113,16 @@ async function sendToTelegram(rangeVal, country, service, text) {
 async function startMonitor() {
     console.log("🚀 [RANGE] Mencari instance browser dari state...");
 
-    // Loop pengecekan: Tunggu sampai main.js/scraper.js berhasil mengisi state.browser
+    // Cek setiap 2 detik apakah browser sudah siap di main process
     const checkState = setInterval(() => {
         if (state.browser) {
             clearInterval(checkState);
-            console.log("✅ [RANGE] Browser ditemukan! Memulai monitoring...");
-            runMonitoringLoop();
+            console.log(`✅ [RANGE] Browser terdeteksi. Menunggu ${CONFIG.ATTACH_DELAY / 1000} detik sebelum membuka tab monitoring...`);
+            
+            // Memberikan jeda 5 detik sebelum menjalankan loop monitoring
+            setTimeout(() => {
+                runMonitoringLoop();
+            }, CONFIG.ATTACH_DELAY);
         }
     }, 2000);
 
@@ -126,14 +131,15 @@ async function startMonitor() {
 
         while (true) {
             try {
-                // Gunakan state.browser yang diinisialisasi di main.js
+                // Menggunakan state.browser yang sudah terbuka di proses utama
                 if (!monitorPage || monitorPage.isClosed()) {
                     const contexts = state.browser.contexts();
                     const context = contexts.length > 0 ? contexts[0] : await state.browser.newContext();
                     monitorPage = await context.newPage();
-                    console.log("✅ [RANGE] Tab monitor berhasil dibuka.");
+                    console.log("✅ [RANGE] Tab monitor berhasil dibuka di browser yang sama.");
                 }
 
+                // Navigasi ke URL dashboard jika belum berada di sana
                 if (!monitorPage.url().includes('/console')) {
                     await monitorPage.goto(CONFIG.DASHBOARD_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
                 }
@@ -167,6 +173,7 @@ async function startMonitor() {
                     } catch (e) { continue; }
                 }
 
+                // Cleanup pesan lama > 10 menit
                 const now = Date.now();
                 for (let [range, val] of SENT_MESSAGES.entries()) {
                     if (now - val.timestamp > 600000) SENT_MESSAGES.delete(range);
@@ -178,5 +185,5 @@ async function startMonitor() {
     }
 }
 
-// Jalankan fungsi inisialisasi monitor
+// Inisialisasi proses monitor
 startMonitor();
