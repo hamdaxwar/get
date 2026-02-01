@@ -8,7 +8,7 @@ const { state, playwrightLock } = require('./helpers/state');
 const commands = require('./handlers/commands');
 const callbacks = require('./handlers/callbacks');
 
-// --- Background Task: Expiry Monitor ---
+// --- Background Task: Monitor Kadaluarsa ---
 async function expiryMonitorTask() {
     setInterval(async () => {
         try {
@@ -16,6 +16,12 @@ async function expiryMonitorTask() {
             const now = Date.now() / 1000;
             const updatedList = [];
             for (const item of waitList) {
+                // Jangan hapus jika nomor baru saja menerima OTP (status extended wait)
+                if (item.otp_received_time) {
+                    updatedList.push(item);
+                    continue;
+                }
+
                 if (now - item.timestamp > 1200) { // 20 Menit
                     const msgId = await tg.tgSend(item.user_id, `⚠️ Nomor <code>${item.number}</code> telah kadaluarsa.`);
                     if (msgId) {
@@ -35,9 +41,9 @@ async function telegramLoop() {
     state.verifiedUsers = db.loadUsers();
     let offset = 0;
 
-    // Bersihkan update lama
+    // Bersihkan update lama agar tidak double respond saat restart
     await tg.tgGetUpdates(-1);
-    console.log("[TELEGRAM] Polling started...");
+    console.log("[TELEGRAM] Polling dimulai...");
 
     while (true) {
         const data = await tg.tgGetUpdates(offset);
@@ -45,12 +51,12 @@ async function telegramLoop() {
             for (const upd of data.result) {
                 offset = upd.update_id + 1;
                 
-                // Handle Messages
+                // Handle Pesan Masuk
                 if (upd.message) {
                     await commands.processCommand(upd.message);
                 }
 
-                // Handle Callbacks
+                // Handle Callback Query (Tombol)
                 if (upd.callback_query) {
                     await callbacks.processCallback(upd.callback_query);
                 }
@@ -60,21 +66,28 @@ async function telegramLoop() {
     }
 }
 
-// --- MAIN FUNCTION ---
+// --- FUNGSI UTAMA ---
 async function main() {
-    console.log("[INFO] Starting NodeJS Bot (Refactored)...");
+    console.log("[INFO] Menjalankan NodeJS Bot...");
     
-    // 1. Init Files
+    // 1. Inisialisasi File Database (JSON)
     db.initializeFiles();
     
-    // 2. Start Internal Monitors (Shared Memory)
-    console.log("[INFO] Loading Range & Message Monitors internally...");
+    // 2. Menjalankan Internal Monitors (Shared Memory)
+    console.log("[INFO] Mengaktifkan semua sistem monitor...");
+    
+    // Mencari nomor baru di dashboard
     require('./range.js'); 
+    
+    // Mengambil pesan masuk dari dashboard ke smc.json
     require('./message.js'); 
 
-    // 3. Cron Job: Restart Browser (07:00 WIB)
+    // MENGIRIM OTP DARI smc.json KE USER TELEGRAM (File yang Anda maksud)
+    require('./sms.js'); 
+
+    // 3. Cron Job: Refresh Browser (Setiap jam 07:00 WIB)
     cron.schedule('0 7 * * *', async () => {
-        console.log("[CRON] Refreshing Browser Session (07:00 WIB)...");
+        console.log("[CRON] Menyegarkan Sesi Browser (07:00 WIB)...");
         const release = await playwrightLock.acquire();
         try {
             await scraper.initBrowser();
@@ -88,9 +101,9 @@ async function main() {
         timezone: "Asia/Jakarta"
     });
 
-    // 4. Start Browser & Loops
+    // 4. Jalankan Browser dan Loop Utama
     try {
-        // Init browser akan mengisi state.browser
+        // Inisialisasi browser untuk digunakan range.js dan message.js
         await scraper.initBrowser();
         
         await Promise.all([
