@@ -1,7 +1,7 @@
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-// Menggunakan state yang sama dengan scraper.js agar sinkron
+// Mengambil state global agar berbagi instance browser dengan scraper.js di main process
 const { state } = require('./helpers/state'); 
 
 // ==================== KONFIGURASI ====================
@@ -11,18 +11,19 @@ const CONFIG = {
     DASHBOARD_URL: "https://stexsms.com/mdashboard/console",
     ALLOWED_SERVICES: ['whatsapp', 'facebook'],
     BANNED_COUNTRIES: ['angola'],
-    ATTACH_DELAY: 5000 // Jeda 5 detik sebelum buka target URL
+    ATTACH_DELAY: 5000 // Jeda 5 detik sebelum membuka tab monitoring
 };
 
 let SENT_MESSAGES = new Map();
 let CACHE_SET = new Set();
 const COUNTRY_EMOJI = require('./country.json');
 
+// Jalur file inline.json sekarang setara dengan range.js
+const INLINE_JSON_PATH = path.join(__dirname, 'inline.json');
+
 // ==================== UTILITY FUNCTIONS ====================
 
-const getCountryEmoji = (countryName) => {
-    return COUNTRY_EMOJI[countryName.toUpperCase()] || "🏴‍☠️";
-};
+const getCountryEmoji = (countryName) => COUNTRY_EMOJI[countryName.toUpperCase()] || "🏴‍☠️";
 
 const cleanPhoneNumber = (phone) => {
     if (!phone) return "N/A";
@@ -44,15 +45,17 @@ const saveToInlineJson = (rangeVal, countryName, service) => {
     const shortService = serviceMap[serviceKey];
 
     try {
-        const targetFolder = path.join(__dirname, 'get');
-        const filePath = path.join(targetFolder, 'inline.json');
-        if (!fs.existsSync(targetFolder)) fs.mkdirSync(targetFolder, { recursive: true });
-
         let dataList = [];
-        if (fs.existsSync(filePath)) {
-            try { dataList = JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch (e) { dataList = []; }
+        // Membaca file jika sudah ada
+        if (fs.existsSync(INLINE_JSON_PATH)) {
+            try { 
+                dataList = JSON.parse(fs.readFileSync(INLINE_JSON_PATH, 'utf-8')); 
+            } catch (e) { 
+                dataList = []; 
+            }
         }
 
+        // Jangan simpan jika range sudah ada
         if (dataList.some(item => item.range === rangeVal)) return;
 
         dataList.push({
@@ -62,9 +65,13 @@ const saveToInlineJson = (rangeVal, countryName, service) => {
             "service": shortService
         });
 
+        // Simpan maksimal 10 data terbaru
         if (dataList.length > 10) dataList = dataList.slice(-10);
-        fs.writeFileSync(filePath, JSON.stringify(dataList, null, 2), 'utf-8');
-    } catch (e) { console.error(`❌ JSON Error: ${e.message}`); }
+        
+        fs.writeFileSync(INLINE_JSON_PATH, JSON.stringify(dataList, null, 2), 'utf-8');
+    } catch (e) { 
+        console.error(`❌ JSON Error: ${e.message}`); 
+    }
 };
 
 const formatLiveMessage = (rangeVal, count, countryName, service, fullMessage) => {
@@ -85,7 +92,8 @@ async function sendToTelegram(rangeVal, country, service, text) {
         if (SENT_MESSAGES.has(rangeVal)) {
             const oldMid = SENT_MESSAGES.get(rangeVal).message_id;
             await axios.post(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/deleteMessage`, {
-                chat_id: CONFIG.CHAT_ID, message_id: oldMid
+                chat_id: CONFIG.CHAT_ID, 
+                message_id: oldMid
             }).catch(() => {});
         }
 
@@ -93,7 +101,9 @@ async function sendToTelegram(rangeVal, country, service, text) {
             chat_id: CONFIG.CHAT_ID,
             text: text,
             parse_mode: 'HTML',
-            reply_markup: { inline_keyboard: [[{ text: "📞GetNumber", url: "https://t.me/myzuraisgoodbot?start=ZuraBot" }]] }
+            reply_markup: { 
+                inline_keyboard: [[{ text: "📞GetNumber", url: "https://t.me/myzuraisgoodbot?start=ZuraBot" }]] 
+            }
         });
 
         if (res.data.ok) {
@@ -105,21 +115,22 @@ async function sendToTelegram(rangeVal, country, service, text) {
             });
             saveToInlineJson(rangeVal, country, service);
         }
-    } catch (e) { console.error(`❌ Telegram Error: ${e.message}`); }
+    } catch (e) { 
+        console.error(`❌ Telegram Error: ${e.message}`); 
+    }
 }
 
 // ==================== MAIN MONITOR LOGIC ====================
 
 async function startMonitor() {
-    console.log("🚀 [RANGE] Mencari instance browser dari state...");
+    console.log("🚀 [RANGE] Menunggu browser aktif dari proses utama...");
 
-    // Cek setiap 2 detik apakah browser sudah siap di main process
     const checkState = setInterval(() => {
         if (state.browser) {
             clearInterval(checkState);
-            console.log(`✅ [RANGE] Browser terdeteksi. Menunggu ${CONFIG.ATTACH_DELAY / 1000} detik sebelum membuka tab monitoring...`);
+            console.log(`✅ [RANGE] Browser terdeteksi. Menunggu ${CONFIG.ATTACH_DELAY / 1000} detik sebelum menempel...`);
             
-            // Memberikan jeda 5 detik sebelum menjalankan loop monitoring
+            // Jeda 5 detik sebelum membuka tab monitoring
             setTimeout(() => {
                 runMonitoringLoop();
             }, CONFIG.ATTACH_DELAY);
@@ -131,15 +142,14 @@ async function startMonitor() {
 
         while (true) {
             try {
-                // Menggunakan state.browser yang sudah terbuka di proses utama
+                // Berbagi instance browser yang sama dengan scraper.js
                 if (!monitorPage || monitorPage.isClosed()) {
                     const contexts = state.browser.contexts();
                     const context = contexts.length > 0 ? contexts[0] : await state.browser.newContext();
                     monitorPage = await context.newPage();
-                    console.log("✅ [RANGE] Tab monitor berhasil dibuka di browser yang sama.");
+                    console.log("✅ [RANGE] Tab monitor berhasil dibuka.");
                 }
 
-                // Navigasi ke URL dashboard jika belum berada di sana
                 if (!monitorPage.url().includes('/console')) {
                     await monitorPage.goto(CONFIG.DASHBOARD_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
                 }
@@ -170,20 +180,23 @@ async function startMonitor() {
                             const currentData = SENT_MESSAGES.get(phone) || { count: 0 };
                             await sendToTelegram(phone, country, service, formatLiveMessage(phone, currentData.count + 1, country, service, fullMessage));
                         }
-                    } catch (e) { continue; }
+                    } catch (e) { 
+                        continue; 
+                    }
                 }
 
-                // Cleanup pesan lama > 10 menit
+                // Hapus cache yang sudah lebih dari 10 menit
                 const now = Date.now();
                 for (let [range, val] of SENT_MESSAGES.entries()) {
                     if (now - val.timestamp > 600000) SENT_MESSAGES.delete(range);
                 }
 
-            } catch (e) { console.error(`❌ [RANGE] Loop Error: ${e.message}`); }
+            } catch (e) { 
+                console.error(`❌ [RANGE] Loop Error: ${e.message}`); 
+            }
             await new Promise(r => setTimeout(r, 10000));
         }
     }
 }
 
-// Inisialisasi proses monitor
 startMonitor();
