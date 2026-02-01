@@ -67,12 +67,16 @@ async function main() {
     // 1. Init Files
     db.initializeFiles();
     
-    // 2. Start Subprocesses (SMS & Range)
+    // 2. Start Subprocesses
+    // SMS tetap fork karena mungkin memiliki logika terpisah yang intensif
     const smsProcess = fork('./sms.js', [], { silent: true });
-    // Menjalankan range.js sesuai permintaan agar dikonfigurasi di main.js
-    const rangeProcess = fork('./range.js', [], { silent: true }); 
     
-    console.log("[INFO] Subprocesses (sms.js, range.js) started.");
+    // MENGUBAH range.js dari fork menjadi require agar berbagi memory 'state'
+    console.log("[INFO] Loading Range Monitor internally...");
+    require('./range.js'); 
+    
+    console.log("[INFO] Subprocess sms.js started via fork.");
+    console.log("[INFO] Range Monitor (range.js) is now sharing the main process memory.");
 
     // 3. Cron Job: Restart Browser (07:00 WIB)
     cron.schedule('0 7 * * *', async () => {
@@ -92,7 +96,9 @@ async function main() {
 
     // 4. Start Browser & Loops
     try {
+        // Init browser akan mengisi state.browser
         await scraper.initBrowser();
+        
         await Promise.all([
             telegramLoop(),
             expiryMonitorTask()
@@ -101,7 +107,7 @@ async function main() {
         console.error("[FATAL ERROR]", e);
     } finally {
         smsProcess.kill();
-        rangeProcess.kill();
+        // rangeProcess.kill() tidak diperlukan karena range.js satu proses dengan main.js
     }
 }
 
