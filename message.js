@@ -1,0 +1,197 @@
+const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+const { state } = require('./helpers/state');
+
+// ================= KONFIGURASI =================
+const BOT_TOKEN = "7562117237:AAFQnb5aCmeSHHi_qAJz3vkoX4HbNGohe38";
+const CHAT_ID = "-1003492226491";
+const ADMIN_ID = "7184123643";
+const TELEGRAM_BOT_LINK = "https://t.me/myzuraisgoodbot";
+const TELEGRAM_ADMIN_LINK = "https://t.me/Imr1d";
+
+const DASHBOARD_URL = "https://stexsms.com/mdashboard/getnum";
+const SMC_JSON_FILE = path.join(__dirname, "smc.json");
+const WAIT_JSON_FILE = path.join(__dirname, "helpers", "wait.json"); // Sesuaikan path jika berbeda
+const CACHE_FILE = path.join(__dirname, 'otp_cache.json');
+const COUNTRY_EMOJI = require('./country.json');
+
+let totalSent = 0;
+
+// ================= UTILS =================
+
+function getCountryEmoji(country) {
+    return COUNTRY_EMOJI[country?.trim().toUpperCase()] || "🏴‍☠️";
+}
+
+function getCache() {
+    if (fs.existsSync(CACHE_FILE)) {
+        try { return JSON.parse(fs.readFileSync(CACHE_FILE)); } catch (e) { return {}; }
+    }
+    return {};
+}
+
+function saveToCache(cache) {
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2));
+}
+
+function getUserData(phoneNumber) {
+    if (!fs.existsSync(WAIT_JSON_FILE)) return { username: "unknown", user_id: null };
+    try {
+        const waitList = JSON.parse(fs.readFileSync(WAIT_JSON_FILE));
+        const cleanTarget = phoneNumber.replace(/[^\d]/g, '');
+        for (const entry of waitList) {
+            const cleanEntry = String(entry.number || "").replace(/[^\d]/g, '');
+            if (cleanTarget === cleanEntry) {
+                return { username: entry.username || "unknown", user_id: entry.user_id };
+            }
+        }
+    } catch (e) { /* ignore */ }
+    return { username: "unknown", user_id: null };
+}
+
+function extractOtp(text) {
+    if (!text) return null;
+    const patterns = [
+        /(\d{3}[\s-]\d{3})/, 
+        /(?:code|otp|kode)[:\s]*([\d\s-]+)/i,
+        /\b(\d{4,8})\b/
+    ];
+    for (const p of patterns) {
+        const m = text.match(p);
+        if (m) {
+            const otp = (m[1] || m[0]).replace(/[^\d]/g, '');
+            if (otp) return otp;
+        }
+    }
+    return null;
+}
+
+function maskPhone(phone) {
+    if (!phone || phone === "N/A") return phone;
+    const digits = phone.replace(/[^\d]/g, '');
+    if (digits.length < 7) return phone;
+    const prefix = phone.startsWith('+') ? '+' : '';
+    return `${prefix}${digits.slice(0, 5)}***${digits.slice(-4)}`;
+}
+
+async function sendTelegram(text, otpCode = null, targetChat = CHAT_ID) {
+    const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+    const payload = {
+        chat_id: targetChat,
+        text: text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+    };
+
+    if (otpCode) {
+        payload.reply_markup = {
+            inline_keyboard: [
+                [{ text: ` Copy: ${otpCode}`, callback_data: `copy_${otpCode}` }, { text: "🎭 Owner", url: TELEGRAM_ADMIN_LINK }],
+                [{ text: "📞 Get Number", url: TELEGRAM_BOT_LINK }]
+            ]
+        };
+    }
+
+    try {
+        await axios.post(url, payload);
+    } catch (e) {
+        console.error(`❌ [TG] Error: ${e.message}`);
+    }
+}
+
+// ================= MONITORING LOGIC =================
+
+async function startSmsMonitor() {
+    console.log("🚀 [MESSAGE] Menunggu browser aktif...");
+
+    const checkState = setInterval(() => {
+        if (state.browser) {
+            clearInterval(checkState);
+            console.log("✅ [MESSAGE] Browser terdeteksi. Menunggu 5 detik sebelum menempel...");
+            setTimeout(() => runLoop(), 8000);
+        }
+    }, 2000);
+
+    async function runLoop() {
+        let monitorPage = null;
+        while (true) {
+            try {
+                if (!monitorPage || monitorPage.isClosed()) {
+                    const contexts = state.browser.contexts();
+                    const context = contexts.length > 0 ? contexts[0] : await state.browser.newContext();
+                    monitorPage = await context.newPage();
+                    console.log("✅ [MESSAGE] Tab SMS Monitor terbuka.");
+                }
+
+                if (!monitorPage.url().includes('/getnum')) {
+                    await monitorPage.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
+                }
+
+                // Ambil data via API internal dashboard (lebih akurat dari scraping UI)
+                const responsePromise = monitorPage.waitForResponse(r => r.url().includes("/getnum/info"), { timeout: 5000 }).catch(() => null);
+                
+                // Trigger refresh data
+                await monitorPage.click('th:has-text("Number Info")', { timeout: 1000 }).catch(() => {});
+                
+                const response = await responsePromise;
+                if (response) {
+                    const json = await response.json();
+                    const numbers = json?.data?.numbers || [];
+
+                    for (const item of numbers) {
+                        if (item.status === 'success' && item.message) {
+                            const otp = extractOtp(item.message);
+                            const phone = "+" + item.number;
+                            const key = `${otp}_${phone}`;
+                            const cache = getCache();
+
+                            if (otp && !cache[key]) {
+                                cache[key] = { t: new Date().toISOString() };
+                                saveToCache(cache);
+
+                                // Save to smc.json (Root Folder)
+                                const entry = {
+                                    service: item.full_number || "Service",
+                                    number: phone,
+                                    otp: otp,
+                                    full_message: item.message,
+                                    timestamp: new Date().toLocaleString()
+                                };
+                                
+                                let existing = [];
+                                if (fs.existsSync(SMC_JSON_FILE)) {
+                                    try { existing = JSON.parse(fs.readFileSync(SMC_JSON_FILE)); } catch(e){}
+                                }
+                                existing.push(entry);
+                                fs.writeFileSync(SMC_JSON_FILE, JSON.stringify(existing.slice(-50), null, 2));
+
+                                // Kirim Telegram
+                                const user = getUserData(phone);
+                                const userTag = user.username !== "unknown" ? `@${user.username}` : "unknown";
+                                const emoji = getCountryEmoji(item.country || "");
+                                
+                                const msg = `💭 <b>New Message Received</b>\n\n` +
+                                            `<b>👤 User:</b> ${userTag}\n` +
+                                            `<b>📱 Number:</b> <code>${maskPhone(phone)}</code>\n` +
+                                            `<b>🌍 Country:</b> <b>${item.country || "N/A"} ${emoji}</b>\n` +
+                                            `<b>✅ Service:</b> <b>${item.full_number || "N/A"}</b>\n\n` +
+                                            `🔐 OTP: <code>${otp}</code>\n\n` +
+                                            `<b>FULL MESSAGE:</b>\n` +
+                                            `<blockquote>${item.message}</blockquote>`;
+                                
+                                await sendTelegram(msg, otp);
+                                totalSent++;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("❌ [MESSAGE] Loop Error:", e.message);
+            }
+            await new Promise(r => setTimeout(r, 10000));
+        }
+    }
+}
+
+startSmsMonitor();
