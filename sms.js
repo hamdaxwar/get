@@ -8,7 +8,6 @@ dotenv.config();
 
 // ================= Konfigurasi Global =================
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const ADMIN_ID = process.env.ADMIN_ID || "12345678";
 const API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
 const WAIT_TIMEOUT_SECONDS = parseInt(process.env.WAIT_TIMEOUT_SECONDS || "1800");
@@ -21,12 +20,19 @@ const PROFILE_FILE = "profile.json";
 const SETTINGS_FILE = "settings.json";
 const DONATE_LINK = "https://zurastore.my.id/donate";
 
-// State Global
-let globalSettings = { balance_enabled: true };
-
 // ================= Fungsi Utilitas =================
 
-// Helper: Escape HTML untuk Telegram
+/**
+ * Helper: Membersihkan nomor telepon agar hanya tersisa angka
+ */
+function normalize(phone) {
+    if (!phone) return "";
+    return String(phone).replace(/[^\d]/g, '');
+}
+
+/**
+ * Helper: Escape HTML untuk Telegram
+ */
 function escapeHtml(text) {
     if (!text) return "";
     return text
@@ -35,7 +41,9 @@ function escapeHtml(text) {
         .replace(/>/g, "&gt;");
 }
 
-// Helper: Load JSON
+/**
+ * Helper: Load JSON
+ */
 function loadJson(filename, defaultVal = []) {
     if (fs.existsSync(filename)) {
         try {
@@ -48,7 +56,9 @@ function loadJson(filename, defaultVal = []) {
     return defaultVal;
 }
 
-// Helper: Save JSON
+/**
+ * Helper: Save JSON
+ */
 function saveJson(filename, data) {
     try {
         fs.writeFileSync(filename, JSON.stringify(data, null, 2));
@@ -57,22 +67,31 @@ function saveJson(filename, data) {
     }
 }
 
-// Helper: API Telegram
+/**
+ * Helper: API Telegram dengan Error Handling 429
+ */
 async function tgApi(method, data) {
     try {
         const response = await axios.post(`${API}/${method}`, data, { timeout: 10000 });
         return response.data;
     } catch (e) {
-        // Error handling silent agar tidak spam console
+        if (e.response && e.response.status === 429) {
+            const retryAfter = (e.response.data.parameters?.retry_after || 5) * 1000;
+            console.log(`[SMS-API] Rate limit terdeteksi. Menunggu ${retryAfter/1000}s...`);
+            await new Promise(r => setTimeout(r, retryAfter));
+            return tgApi(method, data);
+        }
         return null;
     }
 }
 
-// Helper: Update Profile & Saldo
+/**
+ * Helper: Update Profile & Saldo
+ */
 function updateProfileOtp(userId) {
     const profiles = loadJson(PROFILE_FILE, {});
     const strId = String(userId);
-    const today = new Date().toISOString().split('T')[0]; // Format YYYY-MM-DD
+    const today = new Date().toISOString().split('T')[0];
 
     if (!profiles[strId]) {
         profiles[strId] = {
@@ -86,7 +105,6 @@ function updateProfileOtp(userId) {
 
     const p = profiles[strId];
 
-    // Reset harian
     if (p.last_active !== today) {
         p.otp_hari_ini = 0;
         p.last_active = today;
@@ -101,154 +119,78 @@ function updateProfileOtp(userId) {
     return { old: oldBal, new: p.balance };
 }
 
-// ================= Logika Utama =================
+// ================= Logika Utama Monitor =================
 
-// 1. Fungsi Admin Polling (Berjalan di background)
-async function adminLoop() {
-    let lastUpdateId = 0;
-    console.log("[SYSTEM] Admin Command Listener Aktif.");
-
-    while (true) {
-        try {
-            // Long polling getUpdates
-            const res = await axios.get(`${API}/getUpdates`, {
-                params: { offset: lastUpdateId + 1, timeout: 20 }
-            });
-
-            if (res.data && res.data.ok) {
-                for (const up of res.data.result) {
-                    lastUpdateId = up.update_id;
-                    
-                    if (up.message && up.message.text) {
-                        const userId = String(up.message.from.id);
-                        const text = up.message.text;
-
-                        if (userId === String(ADMIN_ID)) {
-                            if (text === "/stopbalance") {
-                                globalSettings.balance_enabled = false;
-                                saveJson(SETTINGS_FILE, globalSettings);
-                                await tgApi("sendMessage", {
-                                    chat_id: userId,
-                                    text: "🛑 <b>Balance Dinonaktifkan Global.</b>",
-                                    parse_mode: "HTML"
-                                });
-                                console.log("[ADMIN] Balance DISABLED");
-                            } else if (text === "/startbalance") {
-                                globalSettings.balance_enabled = true;
-                                saveJson(SETTINGS_FILE, globalSettings);
-                                await tgApi("sendMessage", {
-                                    chat_id: userId,
-                                    text: "✅ <b>Balance Diaktifkan Kembali.</b>",
-                                    parse_mode: "HTML"
-                                });
-                                console.log("[ADMIN] Balance ENABLED");
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (e) {
-            // Ignore timeout errors
-        }
-        
-        // Delay kecil agar tidak membebani CPU jika network error cepat
-        await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-}
-
-// 2. Fungsi Monitor OTP (Core Logic)
 async function checkAndForward() {
+    // Selalu ambil settings terbaru
+    const globalSettings = loadJson(SETTINGS_FILE, { balance_enabled: true });
+    
     const waitList = loadJson(WAIT_FILE, []);
     if (waitList.length === 0) return;
 
     let smsData = loadJson(SMC_FILE, []);
-    // Jika smc.json kosong atau corrupt, jadikan array kosong
     if (!Array.isArray(smsData)) smsData = [];
-    if (smsData.length === 0 && waitList.every(w => w.otp_received_time)) {
-        // Jika tidak ada SMS baru dan semua waitlist sudah terima OTP (menunggu expiry), skip processing berat
-        // Tapi kita harus tetap cek timeout waitlist, jadi lanjut saja
-    }
 
     let newWaitList = [];
-    const currentTime = Date.now() / 1000; // Unix timestamp in seconds
+    const currentTime = Date.now() / 1000;
     let smsChanged = false;
-    
-    const balanceActive = globalSettings.balance_enabled;
 
     for (const waitItem of waitList) {
-        const waitNum = String(waitItem.number);
+        const waitNumClean = normalize(waitItem.number);
         const userId = waitItem.user_id;
         const startTs = waitItem.timestamp || 0;
         const otpRecTime = waitItem.otp_received_time;
 
-        // 2a. Cek jika OTP sudah diterima sebelumnya (Extended Wait)
+        // 1. Cek Extended Wait (Setelah dapat OTP)
         if (otpRecTime) {
-            if (currentTime - otpRecTime > EXTENDED_WAIT_SECONDS) {
-                // Hapus dari list karena sudah lewat masa extended
-                continue; 
-            }
+            if (currentTime - otpRecTime > EXTENDED_WAIT_SECONDS) continue;
             newWaitList.push(waitItem);
             continue;
         }
 
-        // 2b. Cek Timeout Biasa (Belum dapat OTP)
+        // 2. Cek Timeout (Sebelum dapat OTP)
         if (currentTime - startTs > WAIT_TIMEOUT_SECONDS) {
             await tgApi("sendMessage", {
                 chat_id: userId,
-                text: `⚠️ <b>Waktu Habis</b>\nNomor <code>${waitNum}</code> dihapus.`,
+                text: `⚠️ <b>Waktu Habis</b>\nNomor <code>${waitItem.number}</code> dihapus dari antrean.`,
                 parse_mode: "HTML"
             });
-            continue; // Hapus dari list
+            continue;
         }
 
-        // 2c. Cek Pencocokan dengan SMS Masuk
-        let matchFound = false;
-        let remainingSms = [];
-
-        // Kita iterasi smsData untuk mencari match
-        // Strategi: SMS yang cocok dihapus dari smsData (consumed), sisanya disimpan kembali
-        // Tapi karena kita loop waitList, kita harus hati-hati memodifikasi smsData.
-        // Pendekatan: Cari match di smsData SAAT INI.
-        
+        // 3. Pencocokan Nomor
         let targetSmsIndex = -1;
-        
         for (let i = 0; i < smsData.length; i++) {
-            const sms = smsData[i];
-            const smsNum = String(sms.number || sms.Number || "");
-            
-            // Normalisasi sederhana untuk perbandingan (pastikan sama-sama punya + atau tidak)
-            // Di bot.js kita pakai normalizeNumber, disini kita asumsi data di JSON sudah bersih/mirip
-            // Kita coba match exact string dulu
-            if (smsNum === waitNum) {
+            const smsNumClean = normalize(smsData[i].number || smsData[i].Number);
+            // Match jika nomor sama persis atau mengandung nomor target
+            if (smsNumClean === waitNumClean || smsNumClean.endsWith(waitNumClean) || waitNumClean.endsWith(smsNumClean)) {
                 targetSmsIndex = i;
                 break;
             }
         }
 
         if (targetSmsIndex !== -1) {
-            // MATCH FOUND!
             const sms = smsData[targetSmsIndex];
-            // Hapus SMS ini dari array agar tidak diproses user lain (sekali pakai)
-            smsData.splice(targetSmsIndex, 1); 
+            smsData.splice(targetSmsIndex, 1);
             smsChanged = true;
 
             const otp = sms.otp || sms.OTP || "N/A";
             const svc = sms.service || "Unknown";
             const raw = escapeHtml(sms.full_message || sms.FullMessage || "");
 
-            // Logic Reward
+            // Logic Reward Balance
             let balTxt = "";
-            if (!balanceActive) {
-                balTxt = "<b>Not available at this time</b>";
+            if (!globalSettings.balance_enabled) {
+                balTxt = "<b>Balance Sedang Nonaktif</b>";
             } else if (svc.toLowerCase().includes("whatsapp")) {
-                balTxt = "<i>WhatsApp OTP no balance</i>";
+                balTxt = "<i>WhatsApp OTP (No Reward)</i>";
             } else {
                 const bal = updateProfileOtp(userId);
                 balTxt = `$${bal.old.toFixed(6)} > $${bal.new.toFixed(6)}`;
             }
 
-            const msgBody = `🔔 <b>New Message Detected</b>\n\n` +
-                            `☎️ <b>Nomor:</b> <code>${waitNum}</code>\n` +
+            const msgBody = `🔔 <b>Pesan OTP Terdeteksi</b>\n\n` +
+                            `☎️ <b>Nomor:</b> <code>${waitItem.number}</code>\n` +
                             `⚙️ <b>Service:</b> <b>${svc}</b>\n\n` +
                             `💰 <b>Added:</b> ${balTxt}\n\n` +
                             `🗯️ <b>Full Message:</b>\n` +
@@ -262,62 +204,45 @@ async function checkAndForward() {
                 ]]
             };
 
-            await tgApi("sendMessage", {
+            const success = await tgApi("sendMessage", {
                 chat_id: userId,
                 text: msgBody,
                 reply_markup: kb,
                 parse_mode: "HTML"
             });
 
-            // Tandai sudah terima OTP, tapi simpan di waitlist sebentar (extended wait)
-            waitItem.otp_received_time = currentTime;
+            if (success) {
+                waitItem.otp_received_time = currentTime;
+            }
             newWaitList.push(waitItem);
-
         } else {
-            // Tidak ada match, tetap simpan di waitlist
             newWaitList.push(waitItem);
         }
     }
 
-    // Simpan perubahan
-    if (smsChanged) {
-        saveJson(SMC_FILE, smsData);
-    }
-    // Selalu simpan waitlist (untuk update timestamp/penghapusan timeout)
+    if (smsChanged) saveJson(SMC_FILE, smsData);
     saveJson(WAIT_FILE, newWaitList);
 }
 
-// ================= Main Loop =================
-
-async function main() {
-    // Load Settings awal
-    const savedSettings = loadJson(SETTINGS_FILE, { balance_enabled: true });
-    globalSettings = savedSettings;
-
-    // Bersihkan SMC File saat start (Opsional, sesuai python script)
-    if (fs.existsSync(SMC_FILE)) {
-        saveJson(SMC_FILE, []);
-    }
-
+// Loop Pengecekan SMS
+async function startMonitor() {
     console.log("========================================");
-    console.log(`[STARTED] Monitor OTP & Admin Cmd Aktif`);
-    console.log(`[STATUS] Initial Balance: ${globalSettings.balance_enabled}`);
+    console.log(`[STARTED] SMS Forwarder Active Loop`);
     console.log("========================================");
+    
+    // Bersihkan SMC File saat start jika ada
+    if (fs.existsSync(SMC_FILE)) saveJson(SMC_FILE, []);
 
-    // Jalankan Admin Loop (Non-blocking)
-    adminLoop();
-
-    // Jalankan Monitor Loop
     while (true) {
         try {
             await checkAndForward();
         } catch (e) {
-            console.error(`[LOOP ERROR]`, e);
+            console.error(`[SMS LOOP ERROR]`, e.message);
         }
-        // Sleep 2 detik
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Jeda 3 detik agar tidak membebani I/O
+        await new Promise(r => setTimeout(r, 3000));
     }
 }
 
-// Jalankan
-main();
+// Eksekusi monitor
+startMonitor();
