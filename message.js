@@ -12,11 +12,14 @@ const TELEGRAM_ADMIN_LINK = "https://t.me/Imr1d";
 
 const DASHBOARD_URL = "https://stexsms.com/mdashboard/getnum";
 const SMC_JSON_FILE = path.join(__dirname, "smc.json");
-const WAIT_JSON_FILE = path.join(__dirname, "helpers", "wait.json"); // Sesuaikan path jika berbeda
+const WAIT_JSON_FILE = path.join(__dirname, "helpers", "wait.json");
 const CACHE_FILE = path.join(__dirname, 'otp_cache.json');
 const COUNTRY_EMOJI = require('./country.json');
 
 let totalSent = 0;
+let lastUpdateId = 0;
+const startTime = Date.now();
+let monitorPage = null;
 
 // ================= UTILS =================
 
@@ -87,7 +90,11 @@ async function sendTelegram(text, otpCode = null, targetChat = CHAT_ID) {
     if (otpCode) {
         payload.reply_markup = {
             inline_keyboard: [
-                [{ text: ` Copy: ${otpCode}`, callback_data: `copy_${otpCode}` }, { text: "🎭 Owner", url: TELEGRAM_ADMIN_LINK }],
+                [
+                    // Format tombol copy sesuai permintaan
+                    { text: ` ${otpCode}`, copy_text: { text: otpCode } }, 
+                    { text: "🎭 Owner", url: TELEGRAM_ADMIN_LINK }
+                ],
                 [{ text: "📞 Get Number", url: TELEGRAM_BOT_LINK }]
             ]
         };
@@ -100,6 +107,48 @@ async function sendTelegram(text, otpCode = null, targetChat = CHAT_ID) {
     }
 }
 
+// ================= COMMAND HANDLERS =================
+
+async function checkTelegramCommands() {
+    try {
+        const resp = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}`);
+        if (resp.data.result) {
+            for (const u of resp.data.result) {
+                lastUpdateId = u.update_id;
+                const m = u.message;
+                if (!m || String(m.from.id) !== String(ADMIN_ID)) continue;
+
+                if (m.text === "/status") {
+                    const uptime = Math.floor((Date.now() - startTime) / 1000);
+                    const h = Math.floor(uptime / 3600);
+                    const min = Math.floor((uptime % 3600) / 60);
+                    const msg = `🤖 <b>Zura Status (Node)</b>\n⚡ Live: ✅\nUptime: <code>${h}h ${min}m</code>\nTotal Sent: <b>${totalSent}</b>`;
+                    await sendTelegram(msg, null, ADMIN_ID);
+                } else if (m.text === "/refresh") {
+                    if (monitorPage) {
+                        await monitorPage.reload({ waitUntil: 'networkidle' }).catch(() => {});
+                        const p = `ss_${Date.now()}.png`;
+                        await monitorPage.screenshot({ path: p, fullPage: true }).catch(() => {});
+                        
+                        const FormData = require('form-data');
+                        const form = new FormData();
+                        form.append('chat_id', ADMIN_ID);
+                        form.append('caption', `📸 Live Refresh: <code>${new Date().toLocaleTimeString()}</code>`);
+                        form.append('parse_mode', 'HTML');
+                        form.append('photo', fs.createReadStream(p));
+                        
+                        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, form, {
+                            headers: form.getHeaders()
+                        }).catch(() => {});
+                        
+                        if (fs.existsSync(p)) fs.unlinkSync(p);
+                    }
+                }
+            }
+        }
+    } catch (e) {}
+}
+
 // ================= MONITORING LOGIC =================
 
 async function startSmsMonitor() {
@@ -109,12 +158,11 @@ async function startSmsMonitor() {
         if (state.browser) {
             clearInterval(checkState);
             console.log("✅ [MESSAGE] Browser terdeteksi. Menunggu 5 detik sebelum menempel...");
-            setTimeout(() => runLoop(), 8000);
+            setTimeout(() => runLoop(), 5000);
         }
     }, 2000);
 
     async function runLoop() {
-        let monitorPage = null;
         while (true) {
             try {
                 if (!monitorPage || monitorPage.isClosed()) {
@@ -128,10 +176,8 @@ async function startSmsMonitor() {
                     await monitorPage.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
                 }
 
-                // Ambil data via API internal dashboard (lebih akurat dari scraping UI)
+                // API Monitoring
                 const responsePromise = monitorPage.waitForResponse(r => r.url().includes("/getnum/info"), { timeout: 5000 }).catch(() => null);
-                
-                // Trigger refresh data
                 await monitorPage.click('th:has-text("Number Info")', { timeout: 1000 }).catch(() => {});
                 
                 const response = await responsePromise;
@@ -150,7 +196,6 @@ async function startSmsMonitor() {
                                 cache[key] = { t: new Date().toISOString() };
                                 saveToCache(cache);
 
-                                // Save to smc.json (Root Folder)
                                 const entry = {
                                     service: item.full_number || "Service",
                                     number: phone,
@@ -164,9 +209,8 @@ async function startSmsMonitor() {
                                     try { existing = JSON.parse(fs.readFileSync(SMC_JSON_FILE)); } catch(e){}
                                 }
                                 existing.push(entry);
-                                fs.writeFileSync(SMC_JSON_FILE, JSON.stringify(existing.slice(-50), null, 2));
+                                fs.writeFileSync(SMC_JSON_FILE, JSON.stringify(existing.slice(-100), null, 2));
 
-                                // Kirim Telegram
                                 const user = getUserData(phone);
                                 const userTag = user.username !== "unknown" ? `@${user.username}` : "unknown";
                                 const emoji = getCountryEmoji(item.country || "");
@@ -189,6 +233,8 @@ async function startSmsMonitor() {
             } catch (e) {
                 console.error("❌ [MESSAGE] Loop Error:", e.message);
             }
+            // Periksa perintah Telegram setiap iterasi loop
+            await checkTelegramCommands();
             await new Promise(r => setTimeout(r, 10000));
         }
     }
