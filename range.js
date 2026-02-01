@@ -1,7 +1,6 @@
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-// Mengambil state global agar berbagi instance browser dengan scraper.js di main process
 const { state } = require('./helpers/state'); 
 
 // ==================== KONFIGURASI ====================
@@ -11,14 +10,16 @@ const CONFIG = {
     DASHBOARD_URL: "https://stexsms.com/mdashboard/console",
     ALLOWED_SERVICES: ['whatsapp', 'facebook'],
     BANNED_COUNTRIES: ['angola'],
-    ATTACH_DELAY: 5000 // Jeda 5 detik sebelum membuka tab monitoring
+    ATTACH_DELAY: 5000,
+    SEND_DELAY: 1500 // JEDA ANTAR PESAN (1.5 Detik agar sangat aman)
 };
 
 let SENT_MESSAGES = new Map();
 let CACHE_SET = new Set();
-const COUNTRY_EMOJI = require('./country.json');
+let MESSAGE_QUEUE = []; // Antrean pesan
+let IS_PROCESSING_QUEUE = false; // Status antrean
 
-// Jalur file inline.json sekarang setara dengan range.js
+const COUNTRY_EMOJI = require('./country.json');
 const INLINE_JSON_PATH = path.join(__dirname, 'inline.json');
 
 // ==================== UTILITY FUNCTIONS ====================
@@ -38,6 +39,63 @@ const cleanServiceName = (service) => {
     return service.trim();
 };
 
+/**
+ * SISTEM ANTREAN PESAN (QUEUE)
+ * Memastikan pengiriman ke Telegram memiliki jeda agar tidak kena Limit 429
+ */
+async function processQueue() {
+    if (IS_PROCESSING_QUEUE || MESSAGE_QUEUE.length === 0) return;
+    IS_PROCESSING_QUEUE = true;
+
+    while (MESSAGE_QUEUE.length > 0) {
+        const item = MESSAGE_QUEUE.shift(); // Ambil pesan paling depan
+        try {
+            // 1. Hapus pesan lama jika ada (Update Range)
+            if (SENT_MESSAGES.has(item.rangeVal)) {
+                const oldMid = SENT_MESSAGES.get(item.rangeVal).message_id;
+                await axios.post(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/deleteMessage`, {
+                    chat_id: CONFIG.CHAT_ID, 
+                    message_id: oldMid
+                }).catch(() => {});
+                // Beri jeda kecil setelah delete
+                await new Promise(r => setTimeout(r, 500));
+            }
+
+            // 2. Kirim pesan baru
+            const res = await axios.post(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendMessage`, {
+                chat_id: CONFIG.CHAT_ID,
+                text: item.text,
+                parse_mode: 'HTML',
+                reply_markup: { 
+                    inline_keyboard: [[{ text: "📞GetNumber", url: "https://t.me/myzuraisgoodbot?start=ZuraBot" }]] 
+                }
+            });
+
+            if (res.data.ok) {
+                SENT_MESSAGES.set(item.rangeVal, {
+                    message_id: res.data.result.message_id,
+                    count: item.count,
+                    timestamp: Date.now()
+                });
+                saveToInlineJson(item.rangeVal, item.country, item.service);
+                console.log(`✅ [RANGE] Terkirim: ${item.rangeVal} (${item.count}x)`);
+            }
+        } catch (e) {
+            if (e.response && e.response.status === 429) {
+                const wait = (e.response.data.parameters?.retry_after || 10) * 1000;
+                console.log(`[!] Range Limit! Menunggu ${wait/1000}s...`);
+                MESSAGE_QUEUE.unshift(item); // Masukkan kembali ke depan antrean
+                await new Promise(r => setTimeout(r, wait));
+            } else {
+                console.error(`❌ [RANGE] Send Error: ${e.message}`);
+            }
+        }
+        // JEDA WAJIB antar pengiriman
+        await new Promise(r => setTimeout(r, CONFIG.SEND_DELAY));
+    }
+    IS_PROCESSING_QUEUE = false;
+}
+
 const saveToInlineJson = (rangeVal, countryName, service) => {
     const serviceMap = { 'whatsapp': 'WA', 'facebook': 'FB' };
     const serviceKey = service.toLowerCase();
@@ -46,32 +104,17 @@ const saveToInlineJson = (rangeVal, countryName, service) => {
 
     try {
         let dataList = [];
-        // Membaca file jika sudah ada
         if (fs.existsSync(INLINE_JSON_PATH)) {
-            try { 
-                dataList = JSON.parse(fs.readFileSync(INLINE_JSON_PATH, 'utf-8')); 
-            } catch (e) { 
-                dataList = []; 
-            }
+            try { dataList = JSON.parse(fs.readFileSync(INLINE_JSON_PATH, 'utf-8')); } catch (e) { dataList = []; }
         }
-
-        // Jangan simpan jika range sudah ada
         if (dataList.some(item => item.range === rangeVal)) return;
-
         dataList.push({
-            "range": rangeVal,
-            "country": countryName.toUpperCase(),
-            "emoji": getCountryEmoji(countryName),
-            "service": shortService
+            "range": rangeVal, "country": countryName.toUpperCase(),
+            "emoji": getCountryEmoji(countryName), "service": shortService
         });
-
-        // Simpan maksimal 10 data terbaru
         if (dataList.length > 15) dataList = dataList.slice(-15);
-        
         fs.writeFileSync(INLINE_JSON_PATH, JSON.stringify(dataList, null, 2), 'utf-8');
-    } catch (e) { 
-        console.error(`❌ JSON Error: ${e.message}`); 
-    }
+    } catch (e) {}
 };
 
 const formatLiveMessage = (rangeVal, count, countryName, service, fullMessage) => {
@@ -87,67 +130,26 @@ const formatLiveMessage = (rangeVal, count, countryName, service, fullMessage) =
            `<blockquote>${msgEscaped}</blockquote>`;
 };
 
-async function sendToTelegram(rangeVal, country, service, text) {
-    try {
-        if (SENT_MESSAGES.has(rangeVal)) {
-            const oldMid = SENT_MESSAGES.get(rangeVal).message_id;
-            await axios.post(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/deleteMessage`, {
-                chat_id: CONFIG.CHAT_ID, 
-                message_id: oldMid
-            }).catch(() => {});
-        }
-
-        const res = await axios.post(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendMessage`, {
-            chat_id: CONFIG.CHAT_ID,
-            text: text,
-            parse_mode: 'HTML',
-            reply_markup: { 
-                inline_keyboard: [[{ text: "📞GetNumber", url: "https://t.me/myzuraisgoodbot?start=ZuraBot" }]] 
-            }
-        });
-
-        if (res.data.ok) {
-            let currentCount = (SENT_MESSAGES.get(rangeVal)?.count || 0) + 1;
-            SENT_MESSAGES.set(rangeVal, {
-                message_id: res.data.result.message_id,
-                count: currentCount,
-                timestamp: Date.now()
-            });
-            saveToInlineJson(rangeVal, country, service);
-        }
-    } catch (e) { 
-        console.error(`❌ Telegram Error: ${e.message}`); 
-    }
-}
-
-// ==================== MAIN MONITOR LOGIC ====================
+// ==================== MONITOR LOGIC ====================
 
 async function startMonitor() {
-    console.log("🚀 [RANGE] Menunggu browser aktif dari proses utama...");
+    console.log("🚀 [RANGE] Menunggu browser aktif...");
 
     const checkState = setInterval(() => {
         if (state.browser) {
             clearInterval(checkState);
-            console.log(`✅ [RANGE] Browser terdeteksi. Menunggu ${CONFIG.ATTACH_DELAY / 5000} detik sebelum menempel...`);
-            
-            // Jeda 5 detik sebelum membuka tab monitoring
-            setTimeout(() => {
-                runMonitoringLoop();
-            }, CONFIG.ATTACH_DELAY);
+            setTimeout(() => { runMonitoringLoop(); }, CONFIG.ATTACH_DELAY);
         }
     }, 5000);
 
     async function runMonitoringLoop() {
         let monitorPage = null;
-
         while (true) {
             try {
-                // Berbagi instance browser yang sama dengan scraper.js
                 if (!monitorPage || monitorPage.isClosed()) {
                     const contexts = state.browser.contexts();
                     const context = contexts.length > 0 ? contexts[0] : await state.browser.newContext();
                     monitorPage = await context.newPage();
-                    console.log("✅ [RANGE] Tab monitor berhasil dibuka.");
                 }
 
                 if (!monitorPage.url().includes('/console')) {
@@ -178,22 +180,26 @@ async function startMonitor() {
                         if (phone.includes('XXX') && !CACHE_SET.has(cacheKey)) {
                             CACHE_SET.add(cacheKey);
                             const currentData = SENT_MESSAGES.get(phone) || { count: 0 };
-                            await sendToTelegram(phone, country, service, formatLiveMessage(phone, currentData.count + 1, country, service, fullMessage));
+                            const newCount = currentData.count + 1;
+                            
+                            // MASUKKAN KE ANTREAN, BUKAN LANGSUNG KIRIM
+                            MESSAGE_QUEUE.push({
+                                rangeVal: phone,
+                                country,
+                                service,
+                                count: newCount,
+                                text: formatLiveMessage(phone, newCount, country, service, fullMessage)
+                            });
+                            processQueue(); // Jalankan pemroses antrean
                         }
-                    } catch (e) { 
-                        continue; 
-                    }
+                    } catch (e) { continue; }
                 }
 
-                // Hapus cache yang sudah lebih dari 10 menit
                 const now = Date.now();
                 for (let [range, val] of SENT_MESSAGES.entries()) {
                     if (now - val.timestamp > 600000) SENT_MESSAGES.delete(range);
                 }
-
-            } catch (e) { 
-                console.error(`❌ [RANGE] Loop Error: ${e.message}`); 
-            }
+            } catch (e) { console.error(`❌ [RANGE] Loop Error: ${e.message}`); }
             await new Promise(r => setTimeout(r, 10000));
         }
     }
