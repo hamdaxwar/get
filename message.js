@@ -91,7 +91,6 @@ async function sendTelegram(text, otpCode = null, targetChat = CHAT_ID) {
         payload.reply_markup = {
             inline_keyboard: [
                 [
-                    // Format tombol copy sesuai permintaan
                     { text: ` ${otpCode}`, copy_text: { text: otpCode } }, 
                     { text: "🎭 Owner", url: TELEGRAM_ADMIN_LINK }
                 ],
@@ -112,7 +111,7 @@ async function sendTelegram(text, otpCode = null, targetChat = CHAT_ID) {
 async function checkTelegramCommands() {
     try {
         const resp = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}`);
-        if (resp.data.result) {
+        if (resp.data && resp.data.result) {
             for (const u of resp.data.result) {
                 lastUpdateId = u.update_id;
                 const m = u.message;
@@ -152,12 +151,12 @@ async function checkTelegramCommands() {
 // ================= MONITORING LOGIC =================
 
 async function startSmsMonitor() {
-    console.log("🚀 [MESSAGE] Menunggu browser aktif...");
+    console.log("🚀 [MESSAGE] Monitoring SMS otomatis dimulai...");
 
     const checkState = setInterval(() => {
         if (state.browser) {
             clearInterval(checkState);
-            console.log("✅ [MESSAGE] Browser terdeteksi. Menunggu 5 detik sebelum menempel...");
+            console.log("✅ [MESSAGE] Browser siap. Menempel ke dashboard dalam 5 detik...");
             setTimeout(() => runLoop(), 5000);
         }
     }, 2000);
@@ -169,14 +168,14 @@ async function startSmsMonitor() {
                     const contexts = state.browser.contexts();
                     const context = contexts.length > 0 ? contexts[0] : await state.browser.newContext();
                     monitorPage = await context.newPage();
-                    console.log("✅ [MESSAGE] Tab SMS Monitor terbuka.");
+                    console.log("✅ [MESSAGE] Tab SMS aktif.");
                 }
 
                 if (!monitorPage.url().includes('/getnum')) {
                     await monitorPage.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
                 }
 
-                // API Monitoring
+                // Ambil data langsung dari API dashboard
                 const responsePromise = monitorPage.waitForResponse(r => r.url().includes("/getnum/info"), { timeout: 5000 }).catch(() => null);
                 await monitorPage.click('th:has-text("Number Info")', { timeout: 1000 }).catch(() => {});
                 
@@ -196,6 +195,7 @@ async function startSmsMonitor() {
                                 cache[key] = { t: new Date().toISOString() };
                                 saveToCache(cache);
 
+                                // Simpan ke smc.json di Root
                                 const entry = {
                                     service: item.full_number || "Service",
                                     number: phone,
@@ -211,6 +211,7 @@ async function startSmsMonitor() {
                                 existing.push(entry);
                                 fs.writeFileSync(SMC_JSON_FILE, JSON.stringify(existing.slice(-100), null, 2));
 
+                                // Kirim Telegram seketika
                                 const user = getUserData(phone);
                                 const userTag = user.username !== "unknown" ? `@${user.username}` : "unknown";
                                 const emoji = getCountryEmoji(item.country || "");
@@ -231,11 +232,11 @@ async function startSmsMonitor() {
                     }
                 }
             } catch (e) {
-                console.error("❌ [MESSAGE] Loop Error:", e.message);
+                console.error("❌ [MESSAGE] Error:", e.message);
             }
-            // Periksa perintah Telegram setiap iterasi loop
+            // Tetap cek command admin (/status, /refresh)
             await checkTelegramCommands();
-            await new Promise(r => setTimeout(r, 10000));
+            await new Promise(r => setTimeout(r, 10000)); // Refresh setiap 10 detik
         }
     }
 }
