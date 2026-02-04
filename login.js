@@ -1,68 +1,47 @@
-const tg = require('./helpers/telegram');
-
+/**
+ * Fungsi untuk menangani proses login dan navigasi paksa ke halaman GetNum
+ * @param {import('playwright').Page} page 
+ * @param {string} email 
+ * @param {string} password 
+ * @param {string} loginUrl 
+ */
 async function performLogin(page, email, password, loginUrl) {
+    console.log("[BROWSER] Membuka halaman login...");
+    await page.goto(loginUrl, { waitUntil: 'load', timeout: 60000 });
+    
+    // TUNGGU CHROMIUM TERBUKA SEMPURNA SELAMA 2 DETIK
+    console.log("[BROWSER] Menunggu stabilitas browser (2 detik)...");
+    await new Promise(r => setTimeout(r, 2000));
+
+    // Tunggu input muncul berdasarkan selector DevTools asli
+    await page.waitForSelector("input[type='email']", { state: 'visible', timeout: 30000 });
+    
+    console.log("[BROWSER] Mengisi email dan password...");
+    await page.fill("input[type='email']", email); 
+    await page.fill("input[type='password']", password);
+    
+    console.log("[BROWSER] Menekan tombol Sign In...");
+    const loginBtn = page.locator("button[type='submit']");
+    await loginBtn.click();
+
+    // TUNGGU 3 DETIK SETELAH KLIK SUBMIT (PROSES LOGIN DI BELAKANG LAYAR)
+    console.log("[BROWSER] Menunggu proses login selesai (3 detik)...");
+    await new Promise(r => setTimeout(r, 3000));
+
+    // PAKSA REDIRECT LANGSUNG KE GETNUM
+    console.log("[BROWSER] Melakukan navigasi paksa ke: https://stexsms.com/mdashboard/getnum");
+    await page.goto("https://stexsms.com/mdashboard/getnum", { 
+        waitUntil: 'networkidle', 
+        timeout: 60000 
+    });
+
+    // Verifikasi apakah sudah di halaman yang benar
     try {
-        console.log("[BROWSER] Membuka halaman login...");
-        
-        // Gunakan networkidle2 (menunggu koneksi internet stabil)
-        await page.goto(loginUrl, { 
-            waitUntil: 'networkidle2', 
-            timeout: 60000 
-        });
-
-        // Jeda tambahan untuk render JavaScript di Termux
-        await new Promise(r => setTimeout(r, 5000));
-
-        // --- VALIDASI SELECTOR ---
-        console.log("[BROWSER] Mencari input form...");
-        try {
-            // Tunggu selector berdasarkan name sesuai HTML yang kamu kirim
-            await page.waitForSelector("input[name='email']", { timeout: 15000 });
-        } catch (e) {
-            // Jika gagal, ambil screenshot untuk investigasi
-            await page.screenshot({ path: 'login_error.png' });
-            if (process.env.ADMIN_ID) {
-                await tg.tgSendPhoto(process.env.ADMIN_ID, 'login_error.png', "❌ Selector email tidak ditemukan. Cek screenshot!").catch(()=>{});
-            }
-            throw new Error("Selector input[name='email'] tidak ditemukan");
-        }
-
-        // --- PROSES INPUT ---
-        console.log("[BROWSER] Memasukkan kredensial...");
-        
-        // Klik dan bersihkan field email
-        await page.click("input[name='email']", { clickCount: 3 });
-        await page.keyboard.press('Backspace');
-        await page.type("input[name='email']", email, { delay: 50 });
-
-        // Klik dan bersihkan field password
-        await page.click("input[name='password']", { clickCount: 3 });
-        await page.keyboard.press('Backspace');
-        await page.type("input[name='password']", password, { delay: 50 });
-
-        // Klik tombol Sign In
-        console.log("[BROWSER] Menekan tombol Sign In...");
-        await Promise.all([
-            page.click("button[type='submit']"),
-            page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {}),
-        ]);
-
-        // Beri waktu setelah redirect
-        await new Promise(r => setTimeout(r, 5000));
-
-        // Cek apakah login berhasil dengan melihat URL atau element dashboard
-        const currentUrl = page.url();
-        if (currentUrl.includes('login')) {
-            console.log("[BROWSER] Login gagal (Masih di halaman login).");
-            return false;
-        }
-
-        console.log("[BROWSER] Login Berhasil. URL saat ini:", currentUrl);
-        return true;
-
-    } catch (err) {
-        console.error("[LOGIN ERROR]", err.message);
-        return false;
+        await page.waitForSelector("input[name='numberrange']", { state: 'visible', timeout: 15000 });
+        console.log("[BROWSER] KONFIRMASI: Berhasil berada di halaman GetNum.");
+    } catch (e) {
+        console.log("[BROWSER] Peringatan: Input range tidak ditemukan, mencoba refresh halaman...");
+        await page.reload({ waitUntil: 'networkidle' });
     }
 }
 
