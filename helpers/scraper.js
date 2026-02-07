@@ -35,32 +35,50 @@ function getProgressMessage(currentStep, totalSteps, prefixRange, numCount) {
 
 // --- Browser Control ---
 async function initBrowser() {
-    if (state.browser && !state.browser.isClosed()) return state.browser;
+    // Cek browser & page
+    if (state.browser) {
+        try {
+            if (!state.sharedPage || state.sharedPage.isClosed()) {
+                const context = await state.browser.newContext();
+                state.sharedPage = await context.newPage();
+                console.log("[BROWSER] New page created in existing browser.");
+            } else {
+                return state.browser;
+            }
+        } catch (e) {
+            console.log("[BROWSER] Existing browser invalid, launching new one...");
+            try { await state.browser.close(); } catch {}
+            state.browser = null;
+        }
+    }
 
-    console.log("[BROWSER] Launching Chromium...");
-    state.browser = await chromium.launch({
-        headless: config.HEADLESS,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--single-process',
-            '--no-zygote'
-        ]
-    });
+    if (!state.browser) {
+        console.log("[BROWSER] Launching Chromium...");
+        state.browser = await chromium.launch({
+            headless: config.HEADLESS,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--single-process',
+                '--no-zygote'
+            ]
+        });
+        const context = await state.browser.newContext();
+        state.sharedPage = await context.newPage();
+    }
 
-    const context = await state.browser.newContext();
-    state.sharedPage = await context.newPage();
-
+    // Login & navigasi
     try {
         await performLogin(state.sharedPage, config.STEX_EMAIL, config.STEX_PASSWORD, config.LOGIN_URL);
-        console.log("[BROWSER] Login Success. Redirecting to Target URL...");
+        console.log("[BROWSER] Login Success. Navigating to target URL...");
         await state.sharedPage.goto(config.TARGET_URL, { waitUntil: 'domcontentloaded' });
-        console.log("[BROWSER] Ready on Target URL.");
+        console.log("[BROWSER] Ready on target URL.");
     } catch(e) {
         console.error("[BROWSER ERROR]", e.message);
     }
+
     return state.browser;
 }
 
@@ -112,7 +130,6 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
 
     const release = await playwrightLock.acquire();
     try {
-        // Start typing indicator
         actionInterval = await actionTask(userId);
 
         if (!msgId) {
@@ -122,7 +139,6 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
             await tg.tgEdit(userId, msgId, getProgressMessage(0, 0, prefix, clickCount));
         }
 
-        // Ensure browser ready
         const browser = await initBrowser();
         const page = state.sharedPage;
 
@@ -136,8 +152,7 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
         for (let i = 0; i < clickCount; i++) await page.click(BUTTON_SELECTOR, { force: true });
 
         let foundNumbers = [];
-        const maxRounds = 2;
-        for (let r = 0; r < maxRounds; r++) {
+        for (let r = 0; r < 2; r++) {
             foundNumbers = await getAllNumbersParallel(page, clickCount);
             if (foundNumbers.length >= clickCount) break;
             if (r === 1) await page.click(BUTTON_SELECTOR, { force: true });
