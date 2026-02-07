@@ -15,7 +15,7 @@ function normalizeNumber(number) {
     return norm;
 }
 
-// [OPTIMASI TAMPILAN] Menggunakan Static Message agar API Telegram tidak limit & proses lebih cepat
+// FUNGSI BARU: Hanya menampilkan status teks statis (Lebih Cepat)
 function getProgressMessage(prefixRange, numCount) {
     return `<i>Menunggu di antrian sistem aktif...</i>\n\n` +
            `<blockquote>Range: <code>${prefixRange}</code> | Jumlah: <code>${numCount}</code></blockquote>\n` +
@@ -41,7 +41,7 @@ async function initBrowser() {
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--remote-debugging-port=9222',
-            '--disable-dev-shm-usage', // Mengatasi crash memori di VPS
+            '--disable-dev-shm-usage',
             '--disable-gpu',
             '--no-zygote',
             '--single-process',
@@ -69,27 +69,20 @@ async function initBrowser() {
     }
 }
 
-// [OPTIMASI KECEPATAN] Mengambil & Membersihkan data langsung di dalam Engine Browser
+// Mengambil banyak data baris sekaligus (Optimasi CPU)
 async function getAllNumbersParallel(page, numToFetch) {
     try {
-        // Eksekusi logic berat di sisi browser (C++) bukan Node.js
+        // Eksekusi di dalam konteks browser untuk kecepatan maksimal
         const rowsData = await page.$$eval('tbody tr', (rows) => {
             return rows.map(row => {
                 const phoneEl = row.querySelector('td:nth-child(1) span.font-mono');
                 const statusEl = row.querySelector('td:nth-child(1) div:nth-child(2) span');
                 const countryEl = row.querySelector('td:nth-child(2) span.text-slate-200');
                 
-                if (!phoneEl) return null;
-
-                const rawNum = phoneEl.innerText;
-                // Pre-cleaning di browser (lebih cepat)
-                const cleanNum = rawNum.replace(/[\s-]/g, ""); 
-                const status = statusEl ? statusEl.innerText.toLowerCase() : "unknown";
-                
                 return {
-                    n: cleanNum.startsWith('+') ? cleanNum : '+' + cleanNum, // n = number
-                    s: status, // s = status
-                    c: countryEl ? countryEl.innerText.toUpperCase() : "UNKNOWN" // c = country
+                    numberRaw: phoneEl ? phoneEl.innerText.trim() : null,
+                    statusText: statusEl ? statusEl.innerText.trim().toLowerCase() : "unknown",
+                    country: countryEl ? countryEl.innerText.trim().toUpperCase() : "UNKNOWN"
                 };
             });
         });
@@ -98,19 +91,19 @@ async function getAllNumbersParallel(page, numToFetch) {
         const seen = new Set();
 
         for (const res of rowsData) {
-            if (!res) continue;
+            if (!res.numberRaw) continue;
             
+            const number = res.numberRaw.replace(/[\s-]/g, "");
+            const normalized = number.startsWith('+') ? number : '+' + number;
+
             // Filter validasi
-            if (res.s.includes("success") || res.s.includes("failed")) continue;
+            if (db.isInCache(normalized)) continue;
+            if (res.statusText.includes("success") || res.statusText.includes("failed")) continue;
             
-            // Cek Cache Database
-            if (db.isInCache(res.n)) continue; 
-            
-            if (!seen.has(res.n)) {
-                currentNumbers.push({ number: res.n, country: res.c, status: res.s });
-                seen.add(res.n);
+            if (!seen.has(normalized)) {
+                currentNumbers.push({ number: normalized, country: res.country, status: res.statusText });
+                seen.add(normalized);
             }
-            // Short-circuit jika kuota terpenuhi
             if (currentNumbers.length >= numToFetch) break;
         }
         return currentNumbers;
@@ -133,12 +126,14 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
     let actionInterval = null;
     const numToFetch = clickCount;
 
-    // --- Handle Lock & Initial Message ---
+    // Handle Lock & Initial Message
     if (playwrightLock.isLocked()) {
         if (!msgId) {
+            // Kirim pesan tunggu statis
             msgId = await tg.tgSend(userId, getProgressMessage(prefix, numToFetch));
             if (!msgId) return;
         } else {
+            // Edit pesan jadi pesan tunggu statis
             await tg.tgEdit(userId, msgId, getProgressMessage(prefix, numToFetch));
         }
     }
@@ -148,12 +143,12 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
     try {
         actionInterval = await actionTask(userId);
         
-        // Pastikan User mendapat respon awal "Menunggu..."
+        // Pastikan pesan awal terkirim/terupdate sebelum proses berat dimulai
         if (!msgId) {
             msgId = await tg.tgSend(userId, getProgressMessage(prefix, numToFetch));
             if (!msgId) return;
         } else {
-            // Edit sekali saja di awal
+            // Refresh pesan agar user tau bot merespon
             await tg.tgEdit(userId, msgId, getProgressMessage(prefix, numToFetch));
         }
 
@@ -164,57 +159,59 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
 
         const page = state.sharedPage;
         const INPUT_SELECTOR = "input[name='numberrange']";
+
+        // Step 1: Input Range
+        await page.waitForSelector(INPUT_SELECTOR, { state: 'visible', timeout: 10000 });
+        await page.fill(INPUT_SELECTOR, "");
+        await page.fill(INPUT_SELECTOR, prefix);
+        await new Promise(r => setTimeout(r, 500));
+        
+        // Step 2: Trigger Clicks
         const BUTTON_SELECTOR = "button:has-text('Get Number')";
-
-        // --- STEP 1: INPUT & CLICK (DIPERCEPAT) ---
-        try {
-            await page.waitForSelector(INPUT_SELECTOR, { state: 'visible', timeout: 5000 });
-            await page.fill(INPUT_SELECTOR, "");
-            await page.fill(INPUT_SELECTOR, prefix);
-            
-            // Tunggu tombol siap
-            await page.waitForSelector(BUTTON_SELECTOR, { state: 'visible', timeout: 5000 });
-            
-            // Klik Barbar (Cepat)
-            for (let i = 0; i < clickCount; i++) {
-                // 'noWaitAfter: true' membuat script tidak menunggu page load selesai -> INSTANT
-                page.click(BUTTON_SELECTOR, { force: true, noWaitAfter: true }).catch(() => {});
-            }
-        } catch (err) {
-            console.log("Input/Click error (minor):", err.message);
+        await page.waitForSelector(BUTTON_SELECTOR, { state: 'visible', timeout: 10000 });
+        
+        for (let i = 0; i < clickCount; i++) {
+            await page.click(BUTTON_SELECTOR, { force: true });
         }
         
-        // --- STEP 2: MONITORING (LOOP CEPAT / AGGRESIVE POLLING) ---
-        const maxDuration = 15.0; // Maksimal waktu mencari (detik)
-        const startTime = Date.now();
-        const pollingRate = 100; // Cek setiap 100ms (Sangat Cepat)
-        
+        // Tidak ada edit message di sini (Step 3 & 4 dihapus) agar lebih cepat
+
+        // Step 3: Monitoring & Retrieval
+        const delayRound1 = 5.0;
+        const delayRound2 = 5.0;
+        const checkInterval = 0.5; 
         let foundNumbers = [];
-        let isReClicked = false;
+        const rounds = [delayRound1, delayRound2];
 
-        // Loop "While" lebih efisien daripada loop bertingkat untuk polling
-        while ((Date.now() - startTime) < (maxDuration * 1000)) {
-            // 1. Ambil Data
-            foundNumbers = await getAllNumbersParallel(page, numToFetch);
-
-            // 2. Cek Kondisi Berhenti
-            if (foundNumbers.length >= numToFetch) {
-                break; // SELESAI
+        for (let rIdx = 0; rIdx < rounds.length; rIdx++) {
+            const duration = rounds[rIdx];
+            
+            // Jika putaran kedua dan belum dapat nomor, klik sekali lagi
+            if (rIdx === 1) {
+                if (foundNumbers.length < numToFetch) {
+                    await page.click(BUTTON_SELECTOR, { force: true });
+                    await new Promise(r => setTimeout(r, 1500));
+                }
             }
 
-            // 3. Logic Re-Click (Backup jika klik awal tidak respon)
-            // Jika sudah 3 detik berjalan tapi belum dapat hasil, klik lagi
-            if (!isReClicked && (Date.now() - startTime) > 3000) {
-                console.log("[LOGIC] Re-clicking button for assurance...");
-                page.click(BUTTON_SELECTOR, { force: true, noWaitAfter: true }).catch(() => {});
-                isReClicked = true;
-            }
+            const startTime = Date.now() / 1000;
+            let lastCheck = 0;
 
-            // 4. Jeda super singkat (Non-blocking)
-            await new Promise(r => setTimeout(r, pollingRate));
+            while ((Date.now() / 1000 - startTime) < duration) {
+                const now = Date.now() / 1000;
+                if (now - lastCheck >= checkInterval) {
+                    foundNumbers = await getAllNumbersParallel(page, numToFetch);
+                    lastCheck = now;
+                    if (foundNumbers.length >= numToFetch) {
+                        break;
+                    }
+                }
+                // HAPUS LOGIKA UPDATE PROGRESS BAR DI SINI
+                // Loop berjalan diam-diam (silent) agar efisien
+                await new Promise(r => setTimeout(r, 100));
+            }
+            if (foundNumbers.length >= numToFetch) break;
         }
-
-        // --- STEP 3: HASIL & DATABASE ---
 
         if (!foundNumbers || foundNumbers.length === 0) {
             await tg.tgEdit(userId, msgId, "❌ NOMOR TIDAK DI TEMUKAN. Coba lagi atau ganti range.");
@@ -223,7 +220,7 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
 
         const mainCountry = foundNumbers[0].country || "UNKNOWN";
 
-        // Simpan ke Cache & Waitlist Database
+        // Save ke Cache & Waitlist Database
         foundNumbers.forEach(entry => {
             db.saveCache({ number: entry.number, country: entry.country, user_id: userId, time: Date.now() });
             db.addToWaitList(entry.number, userId, usernameTg, firstNameTg);
@@ -232,7 +229,7 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
         state.lastUsedRange[userId] = prefix;
         const emoji = config.COUNTRY_EMOJI[mainCountry] || "🏴‍☠️";
         
-        // --- UI Message Formatting (Sesuai Fitur Lama) ---
+        // --- UI Message Formatting (Final Result) ---
         let msg = "";
         if (numToFetch === 10) {
             msg = "✅ The number is ready\n\n<code>";
@@ -247,12 +244,13 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
                     msg += `📞 Number ${idx + 1} : <code>${entry.number}</code>\n`;
                 });
             }
+            // Menambahkan info negara dan range
             msg += `${emoji} COUNTRY : ${mainCountry}\n` +
                    `🏷️ Range : <code>${prefix}</code>\n\n` +
                    `<b>🤖 Number available please use, Waiting for OTP</b>\n`;
         }
 
-        // --- Inline Keyboard (Fitur Lama Tetap Ada) ---
+        // --- Inline Keyboard (Fitur Change 1 & 3 Tetap Ada) ---
         const inlineKb = {
             inline_keyboard: [
                 [{ text: "🔄 Change 1 Number", callback_data: `change_num:1:${prefix}` }],
@@ -261,12 +259,16 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
             ]
         };
 
-        // Edit pesan terakhir dengan hasil
+        // Edit pesan terakhir kali dengan hasil
         await tg.tgEdit(userId, msgId, msg, inlineKb);
 
     } catch (e) {
         console.error(`[PROCESS ERROR] ${e.message}`);
-        if (msgId) await tg.tgEdit(userId, msgId, `❌ Terjadi kesalahan (${e.message}). Mohon coba lagi.`);
+        if (e.name === 'TimeoutError') {
+            if (msgId) await tg.tgEdit(userId, msgId, "❌ Timeout web. Web lambat atau tombol tidak ditemukan. Mohon coba lagi.");
+        } else {
+            if (msgId) await tg.tgEdit(userId, msgId, `❌ Terjadi kesalahan fatal (${e.message}). Mohon coba lagi.`);
+        }
     } finally {
         if (actionInterval) clearInterval(actionInterval);
         release();
