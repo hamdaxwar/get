@@ -47,7 +47,7 @@ async function initBrowser() {
 
     state.sharedPage = await context.newPage();
 
-    // Blokir asset berat agar loading secepat kilat
+    // Blokir asset berat agar loading secepat kilat (Optimasi VPS)
     await state.sharedPage.route('**/*.{png,jpg,jpeg,gif,webp,svg,woff,woff2,ttf,css}', route => {
         const type = route.request().resourceType();
         if (['image', 'font', 'stylesheet'].includes(type)) {
@@ -59,8 +59,9 @@ async function initBrowser() {
 
     try {
         await performLogin(state.sharedPage, config.STEX_EMAIL, config.STEX_PASSWORD, config.LOGIN_URL);
-        // Pakai 'commit' agar tidak menunggu network idle (lebih cepat)
-        await state.sharedPage.goto(config.TARGET_URL, { waitUntil: 'commit' });
+        // Pakai 'domcontentloaded' agar lebih stabil untuk input awal
+        await state.sharedPage.goto(config.TARGET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        console.log("[BROWSER] Ready for inputs.");
     } catch (e) {
         console.error(`[BROWSER ERROR] ${e.message}`);
     }
@@ -77,7 +78,6 @@ async function getAllNumbersParallel(page, numToFetch) {
                 
                 if (phoneEl) {
                     const statusText = statusEl ? statusEl.innerText.trim().toLowerCase() : "";
-                    // Lewati yang sudah sukses/failed
                     if (statusText.includes("success") || statusText.includes("failed")) continue;
 
                     results.push({
@@ -113,7 +113,7 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
     try {
         actionInterval = await actionTask(userId);
         
-        // --- PESAN STATUS BARU (TANPA PROGRESS BAR) ---
+        // Status awal ringkas tanpa progress bar (Super Cepat)
         const statusText = `<i>Menunggu di antrian sistem aktif...</i>\n\n` +
                            `<blockquote>Range: <code>${prefix}</code> | Jumlah: <code>${numToFetch}</code></blockquote>\n` +
                            `note: <i>please wait...</i>`;
@@ -125,7 +125,7 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
             await tg.tgEdit(userId, msgId, statusText);
         }
 
-        // Init Browser jika diperlukan
+        // Pastikan Browser & Halaman Aktif
         if (!state.sharedPage || state.sharedPage.isClosed() || !state.browser?.isConnected()) {
             await initBrowser();
         }
@@ -134,26 +134,37 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
         const INPUT_SELECTOR = "input[name='numberrange']";
         const BUTTON_SELECTOR = "button:has-text('Get Number')";
 
-        // Manipulasi DOM Langsung
-        await page.waitForSelector(INPUT_SELECTOR, { timeout: 10000 });
-        await page.fill(INPUT_SELECTOR, prefix);
+        // Pastikan halaman di URL yang benar jika terjadi redirect/error
+        if (!page.url().includes(config.TARGET_URL)) {
+            await page.goto(config.TARGET_URL, { waitUntil: 'domcontentloaded' });
+        }
+
+        // --- Perbaikan Input Manual & Inline ---
+        await page.waitForSelector(INPUT_SELECTOR, { state: 'visible', timeout: 15000 });
         
-        // Klik tombol (Parallel)
+        // Klik dulu untuk memastikan fokus, lalu hapus isi lama secara paksa
+        await page.click(INPUT_SELECTOR);
+        await page.fill(INPUT_SELECTOR, ""); 
+        await page.type(INPUT_SELECTOR, String(prefix), { delay: 20 }); // Type lebih aman daripada fill untuk beberapa web
+        
+        // Klik tombol Get Number
+        await page.waitForSelector(BUTTON_SELECTOR, { state: 'visible' });
+        
         const clickPromises = [];
         for (let i = 0; i < clickCount; i++) {
+            // Gunakan dispatchEvent click jika click normal gagal merespon
             clickPromises.push(page.click(BUTTON_SELECTOR, { force: true }));
         }
         await Promise.all(clickPromises);
 
-        // --- POLLING AGRESIF (Cek setiap 300ms) ---
+        // --- Polling Agresif ---
         let foundNumbers = [];
-        const maxWaitTime = 12000; // Max 12 detik cari nomor
+        const maxWaitTime = 15000; 
         const startTime = Date.now();
 
         while (Date.now() - startTime < maxWaitTime) {
             const rawResults = await getAllNumbersParallel(page, numToFetch);
             
-            // Filter nomor yang sudah ada di cache
             foundNumbers = rawResults
                 .map(res => ({
                     ...res,
@@ -163,11 +174,10 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
 
             if (foundNumbers.length >= numToFetch) break;
             
-            // Tunggu sebentar sebelum cek lagi
-            await new Promise(r => setTimeout(r, 300));
+            await new Promise(r => setTimeout(r, 400));
             
-            // Opsional: Klik lagi jika setelah 5 detik belum dapat sama sekali
-            if (Date.now() - startTime > 5000 && foundNumbers.length === 0) {
+            // Anti-Stuck: Jika 4 detik zonk, pencet lagi
+            if (Date.now() - startTime > 4000 && foundNumbers.length === 0) {
                 await page.click(BUTTON_SELECTOR, { force: true });
             }
         }
@@ -177,7 +187,6 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
             return;
         }
 
-        // Finalisasi Data
         const finalNumbers = foundNumbers.slice(0, numToFetch);
         const mainCountry = finalNumbers[0].country || "UNKNOWN";
 
@@ -189,7 +198,6 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
         state.lastUsedRange[userId] = prefix;
         const emoji = config.COUNTRY_EMOJI[mainCountry] || "🏴‍☠️";
         
-        // --- UI Message Formatting (Fitur Lama Tetap Ada) ---
         let msg = "";
         if (numToFetch === 10) {
             msg = "✅The number is already.\n\n<code>";
@@ -209,7 +217,6 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
                    `<b>🤖 Number available please use, Waiting for OTP</b>\n`;
         }
 
-        // --- Inline Keyboard (Fitur Change 1 & 3 Tetap Ada) ---
         const inlineKb = {
             inline_keyboard: [
                 [{ text: "🔄 Change 1 Number", callback_data: `change_num:1:${prefix}` }],
