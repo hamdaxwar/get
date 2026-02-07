@@ -15,9 +15,17 @@ function normalizeNumber(number) {
     return norm;
 }
 
-// --- Browser Control (Optimized for VPS Speed) ---
+// FUNGSI BARU: Hanya menampilkan status teks statis (Lebih Cepat)
+function getProgressMessage(prefixRange, numCount) {
+    return `<i>Menunggu di antrian sistem aktif...</i>\n\n` +
+           `<blockquote>Range: <code>${prefixRange}</code> | Jumlah: <code>${numCount}</code></blockquote>\n` +
+           `note: <i>please wait...</i>`;
+}
+
+// --- Browser Control (Optimized for VPS) ---
 
 async function initBrowser() {
+    // Reuse browser jika masih konek untuk menghemat RAM
     if (state.browser && state.browser.isConnected()) {
         return state.browser;
     }
@@ -26,70 +34,79 @@ async function initBrowser() {
         try { await state.browser.close(); } catch (e) {}
     }
 
-    console.log("[BROWSER] Launching Ultra Fast Chromium...");
+    console.log("[BROWSER] Launching Optimized Chromium...");
     state.browser = await chromium.launch({
         headless: config.HEADLESS,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
+            '--remote-debugging-port=9222',
             '--disable-dev-shm-usage',
             '--disable-gpu',
             '--no-zygote',
             '--single-process',
-            '--disable-extensions',
-            '--disable-blink-features=AutomationControlled'
+            '--disable-extensions'
         ]
     });
 
     const context = await state.browser.newContext({
+        // Gunakan User Agent asli agar tidak terdeteksi bot
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     });
 
     state.sharedPage = await context.newPage();
 
-    // Blokir asset berat agar loading secepat kilat (Optimasi VPS)
-    await state.sharedPage.route('**/*.{png,jpg,jpeg,gif,webp,svg,woff,woff2,ttf,css}', route => {
-        const type = route.request().resourceType();
-        if (['image', 'font', 'stylesheet'].includes(type)) {
-            route.abort();
-        } else {
-            route.continue();
-        }
-    });
+    // Blokir beban berat seperti gambar dan font agar loading cepat & hemat RAM
+    await state.sharedPage.route('**/*.{png,jpg,jpeg,gif,webp,svg,woff,woff2,ttf}', route => route.abort());
 
     try {
         await performLogin(state.sharedPage, config.STEX_EMAIL, config.STEX_PASSWORD, config.LOGIN_URL);
-        // Pakai 'domcontentloaded' agar lebih stabil untuk input awal
-        await state.sharedPage.goto(config.TARGET_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        console.log("[BROWSER] Ready for inputs.");
+        console.log("[BROWSER] Login Success. Redirecting to GetNum...");
+        await state.sharedPage.goto(config.TARGET_URL, { waitUntil: 'domcontentloaded' });
+        console.log("[BROWSER] Ready on Target URL.");
     } catch (e) {
-        console.error(`[BROWSER ERROR] ${e.message}`);
+        console.error(`[BROWSER ERROR] Login/Redirect Failed: ${e.message}`);
     }
 }
 
+// Mengambil banyak data baris sekaligus (Optimasi CPU)
 async function getAllNumbersParallel(page, numToFetch) {
     try {
-        return await page.$$eval('tbody tr', (rows, targetCount) => {
-            const results = [];
-            for (const row of rows) {
+        // Eksekusi di dalam konteks browser untuk kecepatan maksimal
+        const rowsData = await page.$$eval('tbody tr', (rows) => {
+            return rows.map(row => {
                 const phoneEl = row.querySelector('td:nth-child(1) span.font-mono');
                 const statusEl = row.querySelector('td:nth-child(1) div:nth-child(2) span');
                 const countryEl = row.querySelector('td:nth-child(2) span.text-slate-200');
                 
-                if (phoneEl) {
-                    const statusText = statusEl ? statusEl.innerText.trim().toLowerCase() : "";
-                    if (statusText.includes("success") || statusText.includes("failed")) continue;
+                return {
+                    numberRaw: phoneEl ? phoneEl.innerText.trim() : null,
+                    statusText: statusEl ? statusEl.innerText.trim().toLowerCase() : "unknown",
+                    country: countryEl ? countryEl.innerText.trim().toUpperCase() : "UNKNOWN"
+                };
+            });
+        });
 
-                    results.push({
-                        numberRaw: phoneEl.innerText.trim(),
-                        statusText: statusText,
-                        country: countryEl ? countryEl.innerText.trim().toUpperCase() : "UNKNOWN"
-                    });
-                }
-                if (results.length >= targetCount + 5) break;
+        const currentNumbers = [];
+        const seen = new Set();
+
+        for (const res of rowsData) {
+            if (!res.numberRaw) continue;
+            
+            const number = res.numberRaw.replace(/[\s-]/g, "");
+            const normalized = number.startsWith('+') ? number : '+' + number;
+
+            // Filter validasi
+            if (db.isInCache(normalized)) continue;
+            if (res.statusText.includes("success") || res.statusText.includes("failed")) continue;
+            
+            if (!seen.has(normalized)) {
+                currentNumbers.push({ number: normalized, country: res.country, status: res.statusText });
+                seen.add(normalized);
             }
-            return results;
-        }, numToFetch);
+            if (currentNumbers.length >= numToFetch) break;
+        }
+        return currentNumbers;
     } catch (e) {
         return [];
     }
@@ -98,9 +115,10 @@ async function getAllNumbersParallel(page, numToFetch) {
 // --- Main Action Logic ---
 
 async function actionTask(userId) {
-    return setInterval(() => {
+    const interval = setInterval(() => {
         tg.tgSendAction(userId, "typing");
     }, 4500);
+    return interval;
 }
 
 async function processUserInput(userId, prefix, clickCount, usernameTg, firstNameTg, messageIdToEdit = null) {
@@ -108,89 +126,102 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
     let actionInterval = null;
     const numToFetch = clickCount;
 
+    // Handle Lock & Initial Message
+    if (playwrightLock.isLocked()) {
+        if (!msgId) {
+            // Kirim pesan tunggu statis
+            msgId = await tg.tgSend(userId, getProgressMessage(prefix, numToFetch));
+            if (!msgId) return;
+        } else {
+            // Edit pesan jadi pesan tunggu statis
+            await tg.tgEdit(userId, msgId, getProgressMessage(prefix, numToFetch));
+        }
+    }
+
     const release = await playwrightLock.acquire();
     
     try {
         actionInterval = await actionTask(userId);
         
-        // Status awal ringkas tanpa progress bar (Super Cepat)
-        const statusText = `<i>Menunggu di antrian sistem aktif...</i>\n\n` +
-                           `<blockquote>Range: <code>${prefix}</code> | Jumlah: <code>${numToFetch}</code></blockquote>\n` +
-                           `note: <i>please wait...</i>`;
-
+        // Pastikan pesan awal terkirim/terupdate sebelum proses berat dimulai
         if (!msgId) {
-            msgId = await tg.tgSend(userId, statusText);
+            msgId = await tg.tgSend(userId, getProgressMessage(prefix, numToFetch));
             if (!msgId) return;
         } else {
-            await tg.tgEdit(userId, msgId, statusText);
+            // Refresh pesan agar user tau bot merespon
+            await tg.tgEdit(userId, msgId, getProgressMessage(prefix, numToFetch));
         }
 
-        // Pastikan Browser & Halaman Aktif
-        if (!state.sharedPage || state.sharedPage.isClosed() || !state.browser?.isConnected()) {
+        // Re-check/Init Browser
+        if (!state.sharedPage || state.sharedPage.isClosed() || !state.browser.isConnected()) {
             await initBrowser();
         }
 
         const page = state.sharedPage;
         const INPUT_SELECTOR = "input[name='numberrange']";
+
+        // Step 1: Input Range
+        await page.waitForSelector(INPUT_SELECTOR, { state: 'visible', timeout: 10000 });
+        await page.fill(INPUT_SELECTOR, "");
+        await page.fill(INPUT_SELECTOR, prefix);
+        await new Promise(r => setTimeout(r, 500));
+        
+        // Step 2: Trigger Clicks
         const BUTTON_SELECTOR = "button:has-text('Get Number')";
-
-        // Pastikan halaman di URL yang benar jika terjadi redirect/error
-        if (!page.url().includes(config.TARGET_URL)) {
-            await page.goto(config.TARGET_URL, { waitUntil: 'domcontentloaded' });
-        }
-
-        // --- Perbaikan Input Manual & Inline ---
-        await page.waitForSelector(INPUT_SELECTOR, { state: 'visible', timeout: 15000 });
+        await page.waitForSelector(BUTTON_SELECTOR, { state: 'visible', timeout: 10000 });
         
-        // Klik dulu untuk memastikan fokus, lalu hapus isi lama secara paksa
-        await page.click(INPUT_SELECTOR);
-        await page.fill(INPUT_SELECTOR, ""); 
-        await page.type(INPUT_SELECTOR, String(prefix), { delay: 20 }); // Type lebih aman daripada fill untuk beberapa web
-        
-        // Klik tombol Get Number
-        await page.waitForSelector(BUTTON_SELECTOR, { state: 'visible' });
-        
-        const clickPromises = [];
         for (let i = 0; i < clickCount; i++) {
-            // Gunakan dispatchEvent click jika click normal gagal merespon
-            clickPromises.push(page.click(BUTTON_SELECTOR, { force: true }));
+            await page.click(BUTTON_SELECTOR, { force: true });
         }
-        await Promise.all(clickPromises);
+        
+        // Tidak ada edit message di sini (Step 3 & 4 dihapus) agar lebih cepat
 
-        // --- Polling Agresif ---
+        // Step 3: Monitoring & Retrieval
+        const delayRound1 = 5.0;
+        const delayRound2 = 5.0;
+        const checkInterval = 0.5; 
         let foundNumbers = [];
-        const maxWaitTime = 15000; 
-        const startTime = Date.now();
+        const rounds = [delayRound1, delayRound2];
 
-        while (Date.now() - startTime < maxWaitTime) {
-            const rawResults = await getAllNumbersParallel(page, numToFetch);
+        for (let rIdx = 0; rIdx < rounds.length; rIdx++) {
+            const duration = rounds[rIdx];
             
-            foundNumbers = rawResults
-                .map(res => ({
-                    ...res,
-                    number: normalizeNumber(res.numberRaw)
-                }))
-                .filter(res => !db.isInCache(res.number));
-
-            if (foundNumbers.length >= numToFetch) break;
-            
-            await new Promise(r => setTimeout(r, 400));
-            
-            // Anti-Stuck: Jika 4 detik zonk, pencet lagi
-            if (Date.now() - startTime > 4000 && foundNumbers.length === 0) {
-                await page.click(BUTTON_SELECTOR, { force: true });
+            // Jika putaran kedua dan belum dapat nomor, klik sekali lagi
+            if (rIdx === 1) {
+                if (foundNumbers.length < numToFetch) {
+                    await page.click(BUTTON_SELECTOR, { force: true });
+                    await new Promise(r => setTimeout(r, 1500));
+                }
             }
+
+            const startTime = Date.now() / 1000;
+            let lastCheck = 0;
+
+            while ((Date.now() / 1000 - startTime) < duration) {
+                const now = Date.now() / 1000;
+                if (now - lastCheck >= checkInterval) {
+                    foundNumbers = await getAllNumbersParallel(page, numToFetch);
+                    lastCheck = now;
+                    if (foundNumbers.length >= numToFetch) {
+                        break;
+                    }
+                }
+                // HAPUS LOGIKA UPDATE PROGRESS BAR DI SINI
+                // Loop berjalan diam-diam (silent) agar efisien
+                await new Promise(r => setTimeout(r, 100));
+            }
+            if (foundNumbers.length >= numToFetch) break;
         }
 
-        if (foundNumbers.length === 0) {
+        if (!foundNumbers || foundNumbers.length === 0) {
             await tg.tgEdit(userId, msgId, "❌ NOMOR TIDAK DI TEMUKAN. Coba lagi atau ganti range.");
             return;
         }
 
-        const finalNumbers = foundNumbers.slice(0, numToFetch);
-        const mainCountry = finalNumbers[0].country || "UNKNOWN";
+        const mainCountry = foundNumbers[0].country || "UNKNOWN";
 
-        finalNumbers.forEach(entry => {
+        // Save ke Cache & Waitlist Database
+        foundNumbers.forEach(entry => {
             db.saveCache({ number: entry.number, country: entry.country, user_id: userId, time: Date.now() });
             db.addToWaitList(entry.number, userId, usernameTg, firstNameTg);
         });
@@ -198,25 +229,28 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
         state.lastUsedRange[userId] = prefix;
         const emoji = config.COUNTRY_EMOJI[mainCountry] || "🏴‍☠️";
         
+        // --- UI Message Formatting (Final Result) ---
         let msg = "";
         if (numToFetch === 10) {
-            msg = "✅The number is already.\n\n<code>";
-            finalNumbers.forEach(entry => msg += `${entry.number}\n`);
+            msg = "✅ The number is ready\n\n<code>";
+            foundNumbers.slice(0, 10).forEach(entry => msg += `${entry.number}\n`);
             msg += "</code>";
         } else {
             msg = "✅ The number is ready\n\n";
             if (numToFetch === 1) {
-                msg += `📞 Number : <code>${finalNumbers[0].number}</code>\n`;
+                msg += `📞 Number : <code>${foundNumbers[0].number}</code>\n`;
             } else {
-                finalNumbers.forEach((entry, idx) => {
+                foundNumbers.slice(0, numToFetch).forEach((entry, idx) => {
                     msg += `📞 Number ${idx + 1} : <code>${entry.number}</code>\n`;
                 });
             }
+            // Menambahkan info negara dan range
             msg += `${emoji} COUNTRY : ${mainCountry}\n` +
                    `🏷️ Range : <code>${prefix}</code>\n\n` +
                    `<b>🤖 Number available please use, Waiting for OTP</b>\n`;
         }
 
+        // --- Inline Keyboard (Fitur Change 1 & 3 Tetap Ada) ---
         const inlineKb = {
             inline_keyboard: [
                 [{ text: "🔄 Change 1 Number", callback_data: `change_num:1:${prefix}` }],
@@ -225,11 +259,16 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
             ]
         };
 
+        // Edit pesan terakhir kali dengan hasil
         await tg.tgEdit(userId, msgId, msg, inlineKb);
 
     } catch (e) {
-        console.error(`[FATAL ERROR] ${e.message}`);
-        if (msgId) await tg.tgEdit(userId, msgId, `❌ Terjadi kesalahan: ${e.message}`);
+        console.error(`[PROCESS ERROR] ${e.message}`);
+        if (e.name === 'TimeoutError') {
+            if (msgId) await tg.tgEdit(userId, msgId, "❌ Timeout web. Web lambat atau tombol tidak ditemukan. Mohon coba lagi.");
+        } else {
+            if (msgId) await tg.tgEdit(userId, msgId, `❌ Terjadi kesalahan fatal (${e.message}). Mohon coba lagi.`);
+        }
     } finally {
         if (actionInterval) clearInterval(actionInterval);
         release();
@@ -238,5 +277,6 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
 
 module.exports = {
     initBrowser,
-    processUserInput
+    processUserInput,
+    getProgressMessage
 };
