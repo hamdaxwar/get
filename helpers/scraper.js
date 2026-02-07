@@ -15,70 +15,34 @@ function normalizeNumber(number) {
     return norm;
 }
 
-function getProgressMessage(currentStep, totalSteps, prefixRange, numCount) {
-    const progressRatio = Math.min(currentStep / 12, 1.0);
-    const filledCount = Math.ceil(progressRatio * config.BAR.MAX_LENGTH);
-    const emptyCount = config.BAR.MAX_LENGTH - filledCount;
-    const bar = config.BAR.FILLED.repeat(filledCount) + config.BAR.EMPTY.repeat(emptyCount);
-
-    let status = config.STATUS_MAP[currentStep];
-    if (!status) {
-        if (currentStep < 3) status = config.STATUS_MAP[0];
-        else if (currentStep < 5) status = config.STATUS_MAP[4];
-        else if (currentStep < 8) status = config.STATUS_MAP[5];
-        else if (currentStep < 12) status = config.STATUS_MAP[8];
-        else status = config.STATUS_MAP[12];
-    }
-
-    return `<code>${status}</code>\n<blockquote>Range: <code>${prefixRange}</code> | Jumlah: <code>${numCount}</code></blockquote>\n<code>Load:</code> [${bar}]`;
-}
-
 // --- Browser Control ---
 async function initBrowser() {
-    // Cek browser & page
-    if (state.browser) {
-        try {
-            if (!state.sharedPage || state.sharedPage.isClosed()) {
-                const context = await state.browser.newContext();
-                state.sharedPage = await context.newPage();
-                console.log("[BROWSER] New page created in existing browser.");
-            } else {
-                return state.browser;
-            }
-        } catch (e) {
-            console.log("[BROWSER] Existing browser invalid, launching new one...");
-            try { await state.browser.close(); } catch {}
-            state.browser = null;
-        }
-    }
+    if (state.browser && !state.browser.isClosed()) return state.browser;
 
-    if (!state.browser) {
-        console.log("[BROWSER] Launching Chromium...");
-        state.browser = await chromium.launch({
-            headless: config.HEADLESS,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--single-process',
-                '--no-zygote'
-            ]
-        });
-        const context = await state.browser.newContext();
-        state.sharedPage = await context.newPage();
-    }
+    console.log("[BROWSER] Launching Chromium...");
+    state.browser = await chromium.launch({
+        headless: config.HEADLESS,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--single-process',
+            '--no-zygote'
+        ]
+    });
 
-    // Login & navigasi
+    const context = await state.browser.newContext();
+    state.sharedPage = await context.newPage();
+
     try {
         await performLogin(state.sharedPage, config.STEX_EMAIL, config.STEX_PASSWORD, config.LOGIN_URL);
-        console.log("[BROWSER] Login Success. Navigating to target URL...");
+        console.log("[BROWSER] Login Success. Redirecting to Target URL...");
         await state.sharedPage.goto(config.TARGET_URL, { waitUntil: 'domcontentloaded' });
-        console.log("[BROWSER] Ready on target URL.");
+        console.log("[BROWSER] Ready on Target URL.");
     } catch(e) {
         console.error("[BROWSER ERROR]", e.message);
     }
-
     return state.browser;
 }
 
@@ -130,15 +94,19 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
 
     const release = await playwrightLock.acquire();
     try {
+        // Start typing indicator
         actionInterval = await actionTask(userId);
 
+        // Kirim teks awal tanpa progress
+        const startText = `<i>Menunggu di antrian sistem aktif...</i>\n<blockquote>Range: ${prefix} | Jumlah: ${clickCount}</blockquote>\n<i>please wait...</i>`;
         if (!msgId) {
-            msgId = await tg.tgSend(userId, getProgressMessage(0, 0, prefix, clickCount));
+            msgId = await tg.tgSend(userId, startText);
             if (!msgId) return;
         } else {
-            await tg.tgEdit(userId, msgId, getProgressMessage(0, 0, prefix, clickCount));
+            await tg.tgEdit(userId, msgId, startText);
         }
 
+        // Ensure browser ready
         const browser = await initBrowser();
         const page = state.sharedPage;
 
@@ -152,7 +120,8 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
         for (let i = 0; i < clickCount; i++) await page.click(BUTTON_SELECTOR, { force: true });
 
         let foundNumbers = [];
-        for (let r = 0; r < 2; r++) {
+        const maxRounds = 2;
+        for (let r = 0; r < maxRounds; r++) {
             foundNumbers = await getAllNumbersParallel(page, clickCount);
             if (foundNumbers.length >= clickCount) break;
             if (r === 1) await page.click(BUTTON_SELECTOR, { force: true });
@@ -173,6 +142,7 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
         state.lastUsedRange[userId] = prefix;
         const emoji = config.COUNTRY_EMOJI[mainCountry] || "🏴‍☠️";
 
+        // Kirim hasil akhir
         let msg = `✅ The number is ready\n\n`;
         foundNumbers.slice(0, clickCount).forEach((entry, idx) => {
             msg += `📞 Number ${idx + 1} : <code>${entry.number}</code>\n`;
@@ -204,6 +174,5 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
 
 module.exports = {
     initBrowser,
-    processUserInput,
-    getProgressMessage
+    processUserInput
 };
