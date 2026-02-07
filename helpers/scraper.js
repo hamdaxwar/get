@@ -6,7 +6,7 @@ const { state, playwrightLock } = require('./state');
 const db = require('./database');
 const tg = require('./telegram');
 
-// --- Helper Functions Internal ---
+// --- Helper Functions ---
 function normalizeNumber(number) {
     let norm = String(number).trim().replace(/[\s-]/g, "");
     if (!norm.startsWith('+') && /^\d+$/.test(norm)) {
@@ -17,7 +17,12 @@ function normalizeNumber(number) {
 
 // --- Browser Control ---
 async function initBrowser() {
-    if (state.browser && !state.browser.isClosed()) return state.browser;
+    try {
+        // Jika browser ada dan masih punya context terbuka, pakai yang lama
+        if (state.browser && state.browser.contexts().length > 0) return state.browser;
+    } catch(e) {
+        state.browser = null;
+    }
 
     console.log("[BROWSER] Launching Chromium...");
     state.browser = await chromium.launch({
@@ -43,6 +48,7 @@ async function initBrowser() {
     } catch(e) {
         console.error("[BROWSER ERROR]", e.message);
     }
+
     return state.browser;
 }
 
@@ -97,7 +103,7 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
         // Start typing indicator
         actionInterval = await actionTask(userId);
 
-        // Kirim teks awal tanpa progress
+        // Kirim teks awal tanpa progress bar
         const startText = `<i>Menunggu di antrian sistem aktif...</i>\n<blockquote>Range: ${prefix} | Jumlah: ${clickCount}</blockquote>\n<i>please wait...</i>`;
         if (!msgId) {
             msgId = await tg.tgSend(userId, startText);
@@ -106,7 +112,7 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
             await tg.tgEdit(userId, msgId, startText);
         }
 
-        // Ensure browser ready
+        // Pastikan browser siap
         const browser = await initBrowser();
         const page = state.sharedPage;
 
