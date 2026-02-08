@@ -1,4 +1,4 @@
-Const config = require('../config');
+const config = require('../config');
 const db = require('../helpers/database');
 const tg = require('../helpers/telegram');
 const { state } = require('../helpers/state');
