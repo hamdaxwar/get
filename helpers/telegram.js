@@ -16,44 +16,55 @@ async function handleRateLimit(e) {
 }
 
 /**
- * PENTING: Menjawab Callback Query agar loading di tombol hilang
+ * Menjawab Callback Query (PENTING untuk Inline Button)
  */
 async function tgAnswerCallback(callbackQueryId, text = "", showAlert = false) {
-    const data = {
-        callback_query_id: callbackQueryId,
-        text: text,
-        show_alert: showAlert
-    };
+    if (!callbackQueryId) return;
     try {
-        await axios.post(`${config.API_URL}/answerCallbackQuery`, data);
+        await axios.post(`${config.API_URL}/answerCallbackQuery`, {
+            callback_query_id: callbackQueryId,
+            text: text,
+            show_alert: showAlert
+        });
     } catch (e) {
         if (await handleRateLimit(e)) return tgAnswerCallback(callbackQueryId, text, showAlert);
     }
 }
 
+/**
+ * Mengirim Pesan Baru
+ */
 async function tgSend(chatId, text, replyMarkup = null) {
     const data = { chat_id: chatId, text: text, parse_mode: "HTML" };
     if (replyMarkup) data.reply_markup = replyMarkup;
     try {
         const res = await axios.post(`${config.API_URL}/sendMessage`, data);
-        if (res.data.ok) return res.data.result.message_id;
+        if (res.data && res.data.ok) return res.data.result.message_id;
     } catch (e) {
         if (await handleRateLimit(e)) return tgSend(chatId, text, replyMarkup);
+        console.error("[ERROR tgSend]", e.message);
         return null;
     }
     return null;
 }
 
+/**
+ * Mengedit Pesan yang Sudah Ada
+ */
 async function tgEdit(chatId, messageId, text, replyMarkup = null) {
     const data = { chat_id: chatId, message_id: messageId, text: text, parse_mode: "HTML" };
     if (replyMarkup) data.reply_markup = replyMarkup;
     try {
         await axios.post(`${config.API_URL}/editMessageText`, data);
     } catch (e) {
-        await handleRateLimit(e);
+        if (await handleRateLimit(e)) return tgEdit(chatId, messageId, text, replyMarkup);
+        console.error("[ERROR tgEdit]", e.message);
     }
 }
 
+/**
+ * Menghapus Pesan
+ */
 async function tgDelete(chatId, messageId) {
     try {
         await axios.post(`${config.API_URL}/deleteMessage`, { chat_id: chatId, message_id: messageId });
@@ -62,14 +73,9 @@ async function tgDelete(chatId, messageId) {
     }
 }
 
-async function tgSendAction(chatId, action = "typing") {
-    try {
-        await axios.post(`${config.API_URL}/sendChatAction`, { chat_id: chatId, action: action });
-    } catch (e) {
-        await handleRateLimit(e);
-    }
-}
-
+/**
+ * Mendapatkan Updates (Polling)
+ */
 async function tgGetUpdates(offset) {
     try {
         const res = await axios.get(`${config.API_URL}/getUpdates`, { 
@@ -79,7 +85,6 @@ async function tgGetUpdates(offset) {
     } catch (e) {
         if (e.response && e.response.status === 429) {
             const retryAfter = (e.response.data.parameters?.retry_after || 10) * 1000;
-            console.log(`[POLLING] Rate limit. Menunggu ${retryAfter/1000}s...`);
             await new Promise(r => setTimeout(r, retryAfter));
         } else {
             await new Promise(r => setTimeout(r, 5000));
@@ -88,10 +93,13 @@ async function tgGetUpdates(offset) {
     }
 }
 
+/**
+ * Cek apakah user ada di grup
+ */
 async function isUserInGroup(userId, groupId) {
     try {
         const res = await axios.get(`${config.API_URL}/getChatMember`, { params: { chat_id: groupId, user_id: userId } });
-        if (!res.data.ok) return false;
+        if (!res.data || !res.data.ok) return false;
         const status = res.data.result.status;
         return ["member", "administrator", "creator"].includes(status);
     } catch (e) {
@@ -100,48 +108,44 @@ async function isUserInGroup(userId, groupId) {
 }
 
 async function isUserInBothGroups(userId) {
-    const [g1, g2] = await Promise.all([
-        isUserInGroup(userId, config.GROUP_ID_1),
-        isUserInGroup(userId, config.GROUP_ID_2)
-    ]);
-    return g1 && g2;
+    try {
+        const [g1, g2] = await Promise.all([
+            isUserInGroup(userId, config.GROUP_ID_1),
+            isUserInGroup(userId, config.GROUP_ID_2)
+        ]);
+        return g1 && g2;
+    } catch (e) {
+        return false;
+    }
 }
 
+/**
+ * Pengiriman Siaran (Broadcast)
+ */
 async function tgBroadcast(messageText, adminId) {
     const userIds = Array.from(db.loadUsers());
     let success = 0;
     let fail = 0;
     
-    let adminMsgId = await tgSend(adminId, `🔄 Memulai siaran ke <b>${userIds.length}</b> pengguna.\n⏱ Estimasi waktu: <b>${userIds.length} detik</b>.`);
+    let adminMsgId = await tgSend(adminId, `🔄 Memulai siaran ke <b>${userIds.length}</b> pengguna.`);
 
     for (let i = 0; i < userIds.length; i++) {
         const uid = userIds[i];
-        
-        if (i % 5 === 0 && adminMsgId) {
-            await tgEdit(adminId, adminMsgId, `🔄 Siaran Sedang Berjalan...\n\n📊 Progress: <b>${i}/${userIds.length}</b>\n✅ Sukses: <b>${success}</b>\n❌ Gagal: <b>${fail}</b>`);
-        }
-
         const res = await tgSend(uid, messageText);
-        
-        if (res) {
-            success++;
-        } else {
-            fail++;
-        }
-
+        if (res) success++; else fail++;
         await new Promise(r => setTimeout(r, 1000));
     }
     
-    const report = `✅ <b>Siaran Selesai!</b>\n\n👥 Total Pengguna: <b>${userIds.length}</b>\n🟢 Berhasil Terkirim: <b>${success}</b>\n🔴 Gagal Terkirim: <b>${fail}</b>`;
-    
-    if (adminMsgId) {
-        await tgEdit(adminId, adminMsgId, report);
-    } else {
-        await tgSend(adminId, report);
-    }
+    await tgSend(adminId, `✅ <b>Siaran Selesai!</b>\n\n🟢 Berhasil: ${success}\n🔴 Gagal: ${fail}`);
 }
 
 module.exports = {
-    tgSend, tgEdit, tgDelete, tgSendAction, tgGetUpdates,
-    isUserInGroup, isUserInBothGroups, tgBroadcast, tgAnswerCallback // Pastikan di-export
+    tgSend, 
+    tgEdit, 
+    tgDelete, 
+    tgGetUpdates,
+    isUserInGroup, 
+    isUserInBothGroups, 
+    tgBroadcast, 
+    tgAnswerCallback
 };
