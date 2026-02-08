@@ -35,7 +35,6 @@ function getProgressMessage(currentStep, totalSteps, prefixRange, numCount) {
 // --- Browser Control (Optimized for VPS) ---
 
 async function initBrowser() {
-    // Reuse browser jika masih konek untuk menghemat RAM
     if (state.browser && state.browser.isConnected()) {
         return state.browser;
     }
@@ -50,85 +49,92 @@ async function initBrowser() {
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--remote-debugging-port=9222',
             '--disable-dev-shm-usage',
             '--disable-gpu',
             '--no-zygote',
-            '--single-process',
-            '--disable-extensions'
+            '--single-process'
         ]
     });
 
+    // Berikan izin CLIPBOARD agar navigator.clipboard.readText() bisa bekerja
     const context = await state.browser.newContext({
-        // Gunakan User Agent asli agar tidak terdeteksi bot
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        permissions: ['clipboard-read', 'clipboard-write'] 
     });
 
     state.sharedPage = await context.newPage();
 
-    // Blokir beban berat seperti gambar dan font agar loading cepat & hemat RAM
+    // Blokir resource berat
     await state.sharedPage.route('**/*.{png,jpg,jpeg,gif,webp,svg,woff,woff2,ttf}', route => route.abort());
 
     try {
         await performLogin(state.sharedPage, config.STEX_EMAIL, config.STEX_PASSWORD, config.LOGIN_URL);
         console.log("[BROWSER] Login Success. Redirecting to GetNum...");
         await state.sharedPage.goto(config.TARGET_URL, { waitUntil: 'domcontentloaded' });
-        console.log("[BROWSER] Ready on Target URL.");
     } catch (e) {
         console.error(`[BROWSER ERROR] Login/Redirect Failed: ${e.message}`);
     }
 }
 
-// Mengambil banyak data baris sekaligus (Optimasi CPU)
+// Mengambil data via Clipboard (Jauh lebih cepat dari scraping DOM)
+async function getNumberFromClipboard(page) {
+    try {
+        // Eksekusi script di dalam browser untuk membaca clipboard
+        const clipboardContent = await page.evaluate(async () => {
+            try {
+                return await navigator.clipboard.readText();
+            } catch (err) {
+                return null;
+            }
+        });
+
+        if (!clipboardContent) return null;
+
+        const number = clipboardContent.replace(/[\s-]/g, "");
+        const normalized = number.startsWith('+') ? number : '+' + number;
+
+        // Validasi simpel apakah isi clipboard itu benar nomor telepon
+        if (/^\+\d{7,15}$/.test(normalized)) {
+            return normalized;
+        }
+        return null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// Fallback: Tetap simpan fungsi lama jika clipboard gagal/kosong
 async function getAllNumbersParallel(page, numToFetch) {
     try {
-        // Eksekusi di dalam konteks browser untuk kecepatan maksimal
         const rowsData = await page.$$eval('tbody tr', (rows) => {
             return rows.map(row => {
                 const phoneEl = row.querySelector('td:nth-child(1) span.font-mono');
-                const statusEl = row.querySelector('td:nth-child(1) div:nth-child(2) span');
                 const countryEl = row.querySelector('td:nth-child(2) span.text-slate-200');
-                
                 return {
                     numberRaw: phoneEl ? phoneEl.innerText.trim() : null,
-                    statusText: statusEl ? statusEl.innerText.trim().toLowerCase() : "unknown",
                     country: countryEl ? countryEl.innerText.trim().toUpperCase() : "UNKNOWN"
                 };
             });
         });
 
         const currentNumbers = [];
-        const seen = new Set();
-
         for (const res of rowsData) {
             if (!res.numberRaw) continue;
-            
-            const number = res.numberRaw.replace(/[\s-]/g, "");
-            const normalized = number.startsWith('+') ? number : '+' + number;
-
-            // Filter validasi
+            const normalized = normalizeNumber(res.numberRaw);
             if (db.isInCache(normalized)) continue;
-            if (res.statusText.includes("success") || res.statusText.includes("failed")) continue;
-            
-            if (!seen.has(normalized)) {
-                currentNumbers.push({ number: normalized, country: res.country, status: res.statusText });
-                seen.add(normalized);
-            }
+            currentNumbers.push({ number: normalized, country: res.country });
             if (currentNumbers.length >= numToFetch) break;
         }
         return currentNumbers;
-    } catch (e) {
-        return [];
-    }
+    } catch (e) { return []; }
 }
 
 // --- Main Action Logic ---
 
 async function actionTask(userId) {
-    const interval = setInterval(() => {
+    return setInterval(() => {
         tg.tgSendAction(userId, "typing");
     }, 4500);
-    return interval;
 }
 
 async function processUserInput(userId, prefix, clickCount, usernameTg, firstNameTg, messageIdToEdit = null) {
@@ -136,14 +142,12 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
     let actionInterval = null;
     const numToFetch = clickCount;
 
-    // Handle Lock & Initial Message
-    if (playwrightLock.isLocked()) {
-        if (!msgId) {
-            msgId = await tg.tgSend(userId, getProgressMessage(0, 0, prefix, numToFetch));
-            if (!msgId) return;
-        } else {
-            await tg.tgEdit(userId, msgId, getProgressMessage(0, 0, prefix, numToFetch));
-        }
+    // --- OPTIMASI ANTREAN: Cek dulu baru kirim pesan ---
+    const isWaitNeeded = playwrightLock.isLocked();
+    if (isWaitNeeded) {
+        const waitMsg = getProgressMessage(0, 0, prefix, numToFetch);
+        if (!msgId) msgId = await tg.tgSend(userId, waitMsg);
+        else await tg.tgEdit(userId, msgId, waitMsg);
     }
 
     const release = await playwrightLock.acquire();
@@ -153,118 +157,91 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
         let currentStep = 0;
         const startOpTime = Date.now() / 1000;
 
+        // Jika tidak antri, kirim pesan awal sekarang
         if (!msgId) {
             msgId = await tg.tgSend(userId, getProgressMessage(currentStep, 0, prefix, numToFetch));
-            if (!msgId) return;
         }
 
-        // Re-check/Init Browser
         if (!state.sharedPage || state.sharedPage.isClosed() || !state.browser.isConnected()) {
             await initBrowser();
         }
 
         const page = state.sharedPage;
         const INPUT_SELECTOR = "input[name='numberrange']";
+        const BUTTON_SELECTOR = "button:has-text('Get Number')";
 
-        // Step 1: Input Range
+        // Step 1: Input
         await page.waitForSelector(INPUT_SELECTOR, { state: 'visible', timeout: 10000 });
         await page.fill(INPUT_SELECTOR, "");
         await page.fill(INPUT_SELECTOR, prefix);
         currentStep = 1;
-        await new Promise(r => setTimeout(r, 500));
         
-        // Step 2: Trigger Clicks
+        // Step 2: Click & Clipboard Capture
         currentStep = 2;
-        const BUTTON_SELECTOR = "button:has-text('Get Number')";
-        await page.waitForSelector(BUTTON_SELECTOR, { state: 'visible', timeout: 10000 });
-        
+        let foundNumbers = [];
+        const seenInThisSession = new Set();
+
         for (let i = 0; i < clickCount; i++) {
             await page.click(BUTTON_SELECTOR, { force: true });
-        }
-        
-        currentStep = 3;
-        await tg.tgEdit(userId, msgId, getProgressMessage(currentStep, 0, prefix, numToFetch));
-        await new Promise(r => setTimeout(r, 500));
-        
-        currentStep = 4;
-        await tg.tgEdit(userId, msgId, getProgressMessage(currentStep, 0, prefix, numToFetch));
-
-        // Step 3: Monitoring & Retrieval
-        const delayRound1 = 5.0;
-        const delayRound2 = 5.0;
-        const checkInterval = 0.5; // Ditingkatkan sedikit agar tidak terlalu sering hit DOM VPS
-        let foundNumbers = [];
-        const rounds = [delayRound1, delayRound2];
-
-        for (let rIdx = 0; rIdx < rounds.length; rIdx++) {
-            const duration = rounds[rIdx];
-            if (rIdx === 0) currentStep = 5;
-            else if (rIdx === 1) {
-                if (foundNumbers.length < numToFetch) {
-                    await page.click(BUTTON_SELECTOR, { force: true });
-                    await new Promise(r => setTimeout(r, 1500));
-                    currentStep = 8;
-                }
+            
+            // Tunggu sebentar agar clipboard terisi oleh web
+            await new Promise(r => setTimeout(r, 400)); 
+            
+            const num = await getNumberFromClipboard(page);
+            if (num && !db.isInCache(num) && !seenInThisSession.has(num)) {
+                foundNumbers.push({ number: num, country: "DETECTING..." });
+                seenInThisSession.add(num);
             }
-
-            const startTime = Date.now() / 1000;
-            let lastCheck = 0;
-
-            while ((Date.now() / 1000 - startTime) < duration) {
-                const now = Date.now() / 1000;
-                if (now - lastCheck >= checkInterval) {
-                    foundNumbers = await getAllNumbersParallel(page, numToFetch);
-                    lastCheck = now;
-                    if (foundNumbers.length >= numToFetch) {
-                        currentStep = 12;
-                        break;
-                    }
-                }
-
-                // Update UI Progress Bar secara dinamis
-                const elapsedTime = now - startOpTime;
-                const totalEstimated = delayRound1 + delayRound2 + 4;
-                const targetStep = Math.floor(12 * elapsedTime / totalEstimated);
-                
-                if (targetStep > currentStep && targetStep <= 12) {
-                    currentStep = targetStep;
-                    await tg.tgEdit(userId, msgId, getProgressMessage(currentStep, 0, prefix, numToFetch));
-                }
-                await new Promise(r => setTimeout(r, 100));
-            }
-            if (foundNumbers.length >= numToFetch) break;
+            
+            // Update Progress UI setiap klik
+            currentStep = Math.min(3 + i, 11);
+            await tg.tgEdit(userId, msgId, getProgressMessage(currentStep, 0, prefix, numToFetch));
         }
 
-        if (!foundNumbers || foundNumbers.length === 0) {
+        // Jika clipboard gagal/kosong, gunakan metode scraping sebagai backup
+        if (foundNumbers.length < numToFetch) {
+            const backupNums = await getAllNumbersParallel(page, numToFetch);
+            backupNums.forEach(bn => {
+                if (!seenInThisSession.has(bn.number)) {
+                    foundNumbers.push(bn);
+                    seenInThisSession.add(bn.number);
+                }
+            });
+        }
+
+        if (foundNumbers.length === 0) {
             await tg.tgEdit(userId, msgId, "❌ NOMOR TIDAK DI TEMUKAN. Coba lagi atau ganti range.");
             return;
         }
 
-        const mainCountry = foundNumbers[0].country || "UNKNOWN";
+        // Finalisasi data
+        const finalNumbers = foundNumbers.slice(0, numToFetch);
+        const mainCountry = finalNumbers[0].country !== "DETECTING..." ? finalNumbers[0].country : "UNKNOWN";
+        
         currentStep = 12;
         await tg.tgEdit(userId, msgId, getProgressMessage(currentStep, 0, prefix, numToFetch));
 
-        // Save ke Cache & Waitlist Database
-        foundNumbers.forEach(entry => {
+        // Save ke Cache & DB
+        finalNumbers.forEach(entry => {
             db.saveCache({ number: entry.number, country: entry.country, user_id: userId, time: Date.now() });
             db.addToWaitList(entry.number, userId, usernameTg, firstNameTg);
         });
 
         state.lastUsedRange[userId] = prefix;
-        const emoji = config.COUNTRY_EMOJI[mainCountry] || "🏴‍☠️";
+        const emoji = config.COUNTRY_EMOJI[mainCountry] || "🏳️";
         
-        // --- UI Message Formatting (Tetap Sesuai Fitur Lama) ---
+        // --- UI Message (Fitur Lama Tetap Ada) ---
         let msg = "";
         if (numToFetch === 10) {
             msg = "✅The number is already.\n\n<code>";
-            foundNumbers.slice(0, 10).forEach(entry => msg += `${entry.number}\n`);
+            finalNumbers.forEach(entry => msg += `${entry.number}\n`);
             msg += "</code>";
         } else {
             msg = "✅ The number is ready\n\n";
             if (numToFetch === 1) {
-                msg += `📞 Number : <code>${foundNumbers[0].number}</code>\n`;
+                msg += `📞 Number : <code>${finalNumbers[0].number}</code>\n`;
             } else {
-                foundNumbers.slice(0, numToFetch).forEach((entry, idx) => {
+                finalNumbers.forEach((entry, idx) => {
                     msg += `📞 Number ${idx + 1} : <code>${entry.number}</code>\n`;
                 });
             }
@@ -273,7 +250,6 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
                    `<b>🤖 Number available please use, Waiting for OTP</b>\n`;
         }
 
-        // --- Inline Keyboard (Fitur Change 1 & 3 Tetap Ada) ---
         const inlineKb = {
             inline_keyboard: [
                 [{ text: "🔄 Change 1 Number", callback_data: `change_num:1:${prefix}` }],
@@ -286,11 +262,7 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
 
     } catch (e) {
         console.error(`[PROCESS ERROR] ${e.message}`);
-        if (e.name === 'TimeoutError') {
-            if (msgId) await tg.tgEdit(userId, msgId, "❌ Timeout web. Web lambat atau tombol tidak ditemukan. Mohon coba lagi.");
-        } else {
-            if (msgId) await tg.tgEdit(userId, msgId, `❌ Terjadi kesalahan fatal (${e.message}). Mohon coba lagi.`);
-        }
+        if (msgId) await tg.tgEdit(userId, msgId, `❌ Terjadi kesalahan: ${e.message}`);
     } finally {
         if (actionInterval) clearInterval(actionInterval);
         release();
