@@ -1,46 +1,139 @@
+Ini command.js nya
 const config = require('../config');
 const db = require('../helpers/database');
 const tg = require('../helpers/telegram');
 const { state } = require('../helpers/state');
 const scraper = require('../helpers/scraper');
+const adminHandler = require('./admin');
 
-function generateInlineKeyboard(ranges) {
-    const keyboard = [];
-    ranges.forEach(item => {
-        const service = item.service || "WA";
-        const text = `${item.emoji} ${item.country} ${service}`;
-        const callbackData = `select_range:${item.range}`;
-        keyboard.push([{ text: text, callback_data: callbackData }]);
-    });
-    keyboard.push([{ text: "INPUT MANUAL RANGE..🖊️", callback_data: "manual_range" }]);
-    return { inline_keyboard: keyboard };
-}
-
-async function processCallback(cq) {
-    const userId = cq.from.id;
-    const dataCb = cq.data;
-    const chatId = cq.message.chat.id;
-    const menuMsgId = cq.message.message_id;
-    const firstName = cq.from.first_name || "User";
-    const usernameTg = cq.from.username;
+async function processCommand(msg) {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    const firstName = msg.from.first_name || "User";
+    const usernameTg = msg.from.username;
     const mention = usernameTg ? `@${usernameTg}` : `<a href='tg://user?id=${userId}'>${firstName}</a>`;
+    const text = msg.text || "";
 
-    // ==== VERIFY ====
-    if (dataCb === "verify") {
-        if (!(await tg.isUserInBothGroups(userId))) {
-            const kb = {
-                inline_keyboard: [
-                    [{ text: "📌 Gabung Grup 1", url: config.GROUP_LINK_1 }],
-                    [{ text: "📌 Gabung Grup 2", url: config.GROUP_LINK_2 }],
-                    [{ text: "✅ Verifikasi Ulang", callback_data: "verify" }]
-                ]
-            };
-            await tg.tgEdit(chatId, menuMsgId, "❌ Belum gabung kedua grup.", kb);
+    // --- ADMIN COMMANDS ---
+    if (userId === config.ADMIN_ID) {
+        if (text.startsWith("/add")) {
+            state.waitingAdminInput.add(userId);
+            const prompt = "Silahkan kirim daftar range dalam format:\n\n<code>range > country > service</code>\nAtau default service WA:\n<code>range > country</code>\n\nContoh:\n<code>23273XXX > SIERRA LEONE > WA</code>";
+            const mid = await tg.tgSend(userId, prompt);
+            if (mid) state.pendingMessage[userId] = mid;
+            return;
+        } 
+        else if (text === "/info") {
+            state.waitingBroadcastInput.add(userId);
+            const mid = await tg.tgSend(userId, "<b>Pesan Siaran</b>\n\nKirim pesan yang ingin disiarkan. Ketik <code>.batal</code> untuk batal.");
+            if (mid) state.broadcastMessage[userId] = mid;
+            return;
+        } 
+        else if (text.startsWith("/get10akses ")) {
+            const targetId = text.split(" ")[1];
+            db.saveAksesGet10(targetId);
+            await tg.tgSend(userId, `✅ User <code>${targetId}</code> berhasil diberi akses /get10.`);
+            return;
+        } 
+        else if (text === "/list") {
+            await adminHandler.handleListUsers(userId);
+            return;
+        }
+    }
+
+    // --- GET10 ---
+    if (text === "/get10") {
+        if (db.hasGet10Access(userId)) {
+            state.get10RangeInput.add(userId);
+            const mid = await tg.tgSend(userId, "kirim range contoh 225071606XXX");
+            if (mid) state.pendingMessage[userId] = mid;
         } else {
+            await tg.tgSend(userId, "❌ Anda tidak memiliki akses untuk perintah ini.");
+        }
+        return;
+    }
+
+    // --- STATE HANDLERS ---
+    if (state.waitingAdminInput.has(userId)) {
+        state.waitingAdminInput.delete(userId);
+        const pMsgId = state.pendingMessage[userId];
+        delete state.pendingMessage[userId];
+        await adminHandler.handleAddRange(userId, text, pMsgId);
+        return;
+    }
+
+    if (state.waitingBroadcastInput.has(userId)) {
+        state.waitingBroadcastInput.delete(userId);
+        const pMsgId = state.broadcastMessage[userId];
+        delete state.broadcastMessage[userId];
+        await adminHandler.handleBroadcast(userId, chatId, text, pMsgId);
+        return;
+    }
+
+    if (state.waitingDanaInput.has(userId)) {
+        const lines = text.trim().split('\n');
+        if (lines.length >= 2) {
+            const dNum = lines[0].trim();
+            const dName = lines.slice(1).join(' ').trim();
+            if (/^[\d+]+$/.test(dNum)) {
+                state.waitingDanaInput.delete(userId);
+                db.updateUserDana(userId, dNum, dName);
+                await tg.tgSend(userId, `✅ <b>Dana Berhasil Disimpan!</b>\n\nNo: ${dNum}\nA/N: ${dName}`);
+            } else {
+                await tg.tgSend(userId, "❌ Format salah. Pastikan baris pertama adalah NOMOR DANA.");
+            }
+        } else {
+            await tg.tgSend(userId, "❌ Format salah. Mohon kirim:\n\n<code>08123456789\nNama Pemilik</code>");
+        }
+        return;
+    }
+
+    // --- MANUAL & GET10 INPUT PROCESS ---
+    if (state.get10RangeInput.has(userId)) {
+        state.get10RangeInput.delete(userId);
+        const prefix = text.trim();
+        let menuMsgId = state.pendingMessage[userId];
+        delete state.pendingMessage[userId];
+        if (/^\+?\d{3,15}[Xx*#]+$/.test(prefix)) {
+            if (!menuMsgId) menuMsgId = await tg.tgSend(chatId, scraper.getProgressMessage(0, 0, prefix, 10));
+            else await tg.tgEdit(chatId, menuMsgId, scraper.getProgressMessage(0, 0, prefix, 10));
+            scraper.processUserInput(userId, prefix, 10, usernameTg, firstName, menuMsgId);
+        } else {
+            await tg.tgSend(chatId, "❌ Format Range tidak valid.");
+        }
+        return;
+    }
+
+    const isManualFormat = /^\+?\d{3,15}[Xx*#]+$/.test(text.trim());
+    if (state.manualRangeInput.has(userId) || (state.verifiedUsers.has(userId) && isManualFormat)) {
+        state.manualRangeInput.delete(userId);
+        const prefix = text.trim();
+        let menuMsgId = state.pendingMessage[userId];
+        delete state.pendingMessage[userId];
+        if (isManualFormat) {
+            if (!menuMsgId) menuMsgId = await tg.tgSend(chatId, scraper.getProgressMessage(0, 0, prefix, 1));
+            else await tg.tgEdit(chatId, menuMsgId, scraper.getProgressMessage(0, 0, prefix, 1));
+            scraper.processUserInput(userId, prefix, 1, usernameTg, firstName, menuMsgId);
+        } else {
+            await tg.tgSend(chatId, "❌ Format Range tidak valid.");
+        }
+        return;
+    }
+
+    if (text.startsWith("/setdana")) {
+        state.waitingDanaInput.add(userId);
+        await tg.tgSend(userId, "Silahkan kirim dana dalam format:\n\n<code>08123456789\nNama Pemilik</code>");
+        return;
+    }
+
+    // --- START ---
+    if (text === "/start") {
+        if (await tg.isUserInBothGroups(userId)) {
             state.verifiedUsers.add(userId);
             db.saveUsers(userId);
             const prof = db.getUserProfile(userId, firstName);
             const fullName = usernameTg ? `${firstName} (@${usernameTg})` : firstName;
+            
             const msgProfile = `✅ <b>Verifikasi Berhasil, ${mention}</b>\n\n` +
                 `👤 <b>Profil Anda :</b>\n` +
                 `🔖 <b>Nama</b> : ${fullName}\n` +
@@ -49,132 +142,25 @@ async function processCallback(cq) {
                 `📊 <b>Total of all OTPs</b> : ${prof.otp_semua}\n` +
                 `📊 <b>daily OTP count</b> : ${prof.otp_hari_ini}\n` +
                 `💰 <b>Balance</b> : $${prof.balance.toFixed(6)}\n`;
+
             const kb = {
                 inline_keyboard: [
                     [{ text: "📲 Get Number", callback_data: "getnum" }, { text: "👨‍💼 Admin", url: "https://t.me/" }],
                     [{ text: "💸 Withdraw Money", callback_data: "withdraw_menu" }]
                 ]
             };
-            await tg.tgEdit(chatId, menuMsgId, msgProfile, kb);
+            await tg.tgSend(userId, msgProfile, kb);
+        } else {
+            const kb = {
+                inline_keyboard: [
+                    [{ text: "📌 Gabung Grup 1", url: config.GROUP_LINK_1 }],
+                    [{ text: "📌 Gabung Grup 2", url: config.GROUP_LINK_2 }],
+                    [{ text: "✅ Verifikasi Ulang", callback_data: "verify" }]
+                ]
+            };
+            await tg.tgSend(userId, `Halo ${mention} 👋\nHarap gabung kedua grup di bawah untuk verifikasi:`, kb);
         }
-        return;
-    }
-
-    // ==== GET NUMBER ====
-    if (dataCb === "getnum") {
-        if (!state.verifiedUsers.has(userId)) {
-            await tg.tgEdit(chatId, menuMsgId, "⚠️ Harap verifikasi dulu.");
-            return;
-        }
-        const ranges = db.loadInlineRanges();
-        const kb = ranges.length > 0 ? generateInlineKeyboard(ranges) : { inline_keyboard: [[{ text: "✍️ Input Manual Range", callback_data: "manual_range" }]] };
-        await tg.tgEdit(chatId, menuMsgId, "<b>Get Number</b>\n\nSilahkan pilih range atau input manual.", kb);
-        return;
-    }
-
-    // ==== MANUAL RANGE ====
-    if (dataCb === "manual_range") {
-        if (!state.verifiedUsers.has(userId)) return;
-        state.manualRangeInput.add(userId);
-        await tg.tgEdit(chatId, menuMsgId, "<b>Input Manual Range</b>\n\nKirim Range anda, contoh: <code>2327600XXX</code>");
-        state.pendingMessage[userId] = menuMsgId;
-        return;
-    }
-
-    // ==== SELECT RANGE ====
-    if (dataCb.startsWith("select_range:")) {
-        if (!state.verifiedUsers.has(userId)) return;
-        const prefix = dataCb.split(":")[1];
-        const msgText = scraper.getProgressMessage(prefix, 1);
-        await tg.tgEdit(chatId, menuMsgId, msgText);
-        scraper.processUserInput(userId, prefix, 1, usernameTg, firstName, menuMsgId);
-        return;
-    }
-
-    // ==== CHANGE NUM ====
-    if (dataCb.startsWith("change_num:")) {
-        if (!state.verifiedUsers.has(userId)) return;
-        const parts = dataCb.split(":");
-        const numFetch = parseInt(parts[1]);
-        const prefix = parts[2];
-        await tg.tgDelete(chatId, menuMsgId);
-        scraper.processUserInput(userId, prefix, numFetch, usernameTg, firstName);
-        return;
-    }
-
-    // ==== WITHDRAW ====
-    if (dataCb === "withdraw_menu") {
-        const prof = db.getUserProfile(userId, firstName);
-        const msgWd = `<b>💸 Withdraw Money</b>\n\nSilahkan Pilih Jumlah Withdraw anda\n🧾 Dana: <code>${prof.dana}</code>\n👤 A/N : <code>${prof.dana_an}</code>\n💰 Balance: $${prof.balance.toFixed(6)}\n\n<i>Minimal Withdraw: $${config.MIN_WD_AMOUNT.toFixed(6)}</i>`;
-        const kbWd = {
-            inline_keyboard: [
-                [{ text: "$1.000000", callback_data: "wd_req:1.0" }, { text: "$2.000000", callback_data: "wd_req:2.0" }],
-                [{ text: "$3.000000", callback_data: "wd_req:3.0" }, { text: "$5.000000", callback_data: "wd_req:5.0" }],
-                [{ text: "⚙️ Setting Dana / Ganti", callback_data: "set_dana_cb" }],
-                [{ text: "🔙 Kembali", callback_data: "verify" }]
-            ]
-        };
-        await tg.tgEdit(chatId, menuMsgId, msgWd, kbWd);
-        return;
-    }
-
-    if (dataCb === "set_dana_cb") {
-        state.waitingDanaInput.add(userId);
-        await tg.tgEdit(chatId, menuMsgId, "Silahkan kirim dana dalam format:\n\n<code>08123456789\nNama Pemilik</code>");
-        return;
-    }
-
-    if (dataCb.startsWith("wd_req:")) {
-        const amount = parseFloat(dataCb.split(":")[1]);
-        const profiles = db.loadProfiles();
-        const prof = profiles[String(userId)];
-
-        if (!prof || prof.dana === "Belum Diset") {
-            await tg.tgSend(chatId, "❌ Harap Setting Dana terlebih dahulu!");
-            return;
-        }
-        if (prof.balance < amount) {
-            await tg.tgSend(chatId, `❌ Saldo tidak cukup! Balance anda: $${prof.balance.toFixed(6)}`);
-            return;
-        }
-
-        prof.balance -= amount;
-        db.saveProfiles(profiles);
-
-        const msgAdmin = `<b>🔔 User meminta Withdraw</b>\n\n👤 User: ${mention}\n🆔 ID: <code>${userId}</code>\n💵 Jumlah: <b>$${amount.toFixed(6)}</b>\n🧾 Dana: <code>${prof.dana}</code>\n👤 A/N: <code>${prof.dana_an}</code>`;
-        const kbAdmin = {
-            inline_keyboard: [[
-                { text: "✅ Approve", callback_data: `wd_act:apr:${userId}:${amount}` },
-                { text: "❌ Cancel", callback_data: `wd_act:cncl:${userId}:${amount}` }
-            ]]
-        };
-        await tg.tgSend(config.ADMIN_ID, msgAdmin, kbAdmin);
-        await tg.tgEdit(chatId, menuMsgId, "✅ <b>Permintaan Withdraw Terkirim!</b>\nMenunggu persetujuan Admin..");
-        return;
-    }
-
-    if (dataCb.startsWith("wd_act:")) {
-        if (userId !== config.ADMIN_ID) return;
-        const parts = dataCb.split(":");
-        const action = parts[1];
-        const targetId = parseInt(parts[2]);
-        const amount = parseFloat(parts[3]);
-
-        if (action === "apr") {
-            await tg.tgEdit(chatId, menuMsgId, `✅ Withdraw User ${targetId} sebesar $${amount} DISETUJUI.`);
-            const prof = db.getUserProfile(targetId);
-            await tg.tgSend(targetId, `<b>✅ Selamat Withdraw Anda Sukses!</b>\n\n💵 Penarikan : $${amount.toFixed(6)}\n💰 Saldo saat ini: $${prof.balance.toFixed(6)}`);
-        } else if (action === "cncl") {
-            const profiles = db.loadProfiles();
-            if (profiles[String(targetId)]) {
-                profiles[String(targetId)].balance += amount;
-                db.saveProfiles(profiles);
-            }
-            await tg.tgEdit(chatId, menuMsgId, `❌ Withdraw User ${targetId} sebesar $${amount} DIBATALKAN.`);
-            await tg.tgSend(targetId, "❌ Admin membatalkan Withdraw.\nSilahkan chat Admin atau melakukan ulang Withdraw.");
-        }
-        return;
     }
 }
 
-module.exports = { processCallback };
+module.exports = { processCommand };
