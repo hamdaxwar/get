@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+Const { chromium } = require('playwright');
 const config = require('../config');
 const { performLogin } = require('../login.js');
 const { state, playwrightLock } = require('./state');
@@ -15,11 +15,21 @@ function normalizeNumber(number) {
     return norm;
 }
 
-// FUNGSI BARU: Hanya menampilkan status teks statis (Lebih Cepat)
-function getProgressMessage(prefixRange, numCount) {
-    return `<i>Menunggu di antrian sistem aktif...</i>\n\n` +
-           `<blockquote>Range: <code>${prefixRange}</code> | Jumlah: <code>${numCount}</code></blockquote>\n` +
-           `note: <i>please wait...</i>`;
+function getProgressMessage(currentStep, totalSteps, prefixRange, numCount) {
+    const progressRatio = Math.min(currentStep / 12, 1.0);
+    const filledCount = Math.ceil(progressRatio * config.BAR.MAX_LENGTH);
+    const emptyCount = config.BAR.MAX_LENGTH - filledCount;
+    const bar = config.BAR.FILLED.repeat(filledCount) + config.BAR.EMPTY.repeat(emptyCount);
+
+    let status = config.STATUS_MAP[currentStep];
+    if (!status) {
+        if (currentStep < 3) status = config.STATUS_MAP[0];
+        else if (currentStep < 5) status = config.STATUS_MAP[4];
+        else if (currentStep < 8) status = config.STATUS_MAP[5];
+        else if (currentStep < 12) status = config.STATUS_MAP[8];
+        else status = config.STATUS_MAP[12];
+    }
+    return `<code>${status}</code>\n<blockquote>Range: <code>${prefixRange}</code> | Jumlah: <code>${numCount}</code></blockquote>\n<code>Load:</code> [${bar}]`;
 }
 
 // --- Browser Control (Optimized for VPS) ---
@@ -129,12 +139,10 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
     // Handle Lock & Initial Message
     if (playwrightLock.isLocked()) {
         if (!msgId) {
-            // Kirim pesan tunggu statis
-            msgId = await tg.tgSend(userId, getProgressMessage(prefix, numToFetch));
+            msgId = await tg.tgSend(userId, getProgressMessage(0, 0, prefix, numToFetch));
             if (!msgId) return;
         } else {
-            // Edit pesan jadi pesan tunggu statis
-            await tg.tgEdit(userId, msgId, getProgressMessage(prefix, numToFetch));
+            await tg.tgEdit(userId, msgId, getProgressMessage(0, 0, prefix, numToFetch));
         }
     }
 
@@ -142,14 +150,12 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
     
     try {
         actionInterval = await actionTask(userId);
-        
-        // Pastikan pesan awal terkirim/terupdate sebelum proses berat dimulai
+        let currentStep = 0;
+        const startOpTime = Date.now() / 1000;
+
         if (!msgId) {
-            msgId = await tg.tgSend(userId, getProgressMessage(prefix, numToFetch));
+            msgId = await tg.tgSend(userId, getProgressMessage(currentStep, 0, prefix, numToFetch));
             if (!msgId) return;
-        } else {
-            // Refresh pesan agar user tau bot merespon
-            await tg.tgEdit(userId, msgId, getProgressMessage(prefix, numToFetch));
         }
 
         // Re-check/Init Browser
@@ -164,9 +170,11 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
         await page.waitForSelector(INPUT_SELECTOR, { state: 'visible', timeout: 10000 });
         await page.fill(INPUT_SELECTOR, "");
         await page.fill(INPUT_SELECTOR, prefix);
+        currentStep = 1;
         await new Promise(r => setTimeout(r, 500));
         
         // Step 2: Trigger Clicks
+        currentStep = 2;
         const BUTTON_SELECTOR = "button:has-text('Get Number')";
         await page.waitForSelector(BUTTON_SELECTOR, { state: 'visible', timeout: 10000 });
         
@@ -174,23 +182,28 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
             await page.click(BUTTON_SELECTOR, { force: true });
         }
         
-        // Tidak ada edit message di sini (Step 3 & 4 dihapus) agar lebih cepat
+        currentStep = 3;
+        await tg.tgEdit(userId, msgId, getProgressMessage(currentStep, 0, prefix, numToFetch));
+        await new Promise(r => setTimeout(r, 500));
+        
+        currentStep = 4;
+        await tg.tgEdit(userId, msgId, getProgressMessage(currentStep, 0, prefix, numToFetch));
 
         // Step 3: Monitoring & Retrieval
         const delayRound1 = 5.0;
         const delayRound2 = 5.0;
-        const checkInterval = 0.5; 
+        const checkInterval = 0.5; // Ditingkatkan sedikit agar tidak terlalu sering hit DOM VPS
         let foundNumbers = [];
         const rounds = [delayRound1, delayRound2];
 
         for (let rIdx = 0; rIdx < rounds.length; rIdx++) {
             const duration = rounds[rIdx];
-            
-            // Jika putaran kedua dan belum dapat nomor, klik sekali lagi
-            if (rIdx === 1) {
+            if (rIdx === 0) currentStep = 5;
+            else if (rIdx === 1) {
                 if (foundNumbers.length < numToFetch) {
                     await page.click(BUTTON_SELECTOR, { force: true });
                     await new Promise(r => setTimeout(r, 1500));
+                    currentStep = 8;
                 }
             }
 
@@ -203,11 +216,20 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
                     foundNumbers = await getAllNumbersParallel(page, numToFetch);
                     lastCheck = now;
                     if (foundNumbers.length >= numToFetch) {
+                        currentStep = 12;
                         break;
                     }
                 }
-                // HAPUS LOGIKA UPDATE PROGRESS BAR DI SINI
-                // Loop berjalan diam-diam (silent) agar efisien
+
+                // Update UI Progress Bar secara dinamis
+                const elapsedTime = now - startOpTime;
+                const totalEstimated = delayRound1 + delayRound2 + 4;
+                const targetStep = Math.floor(12 * elapsedTime / totalEstimated);
+                
+                if (targetStep > currentStep && targetStep <= 12) {
+                    currentStep = targetStep;
+                    await tg.tgEdit(userId, msgId, getProgressMessage(currentStep, 0, prefix, numToFetch));
+                }
                 await new Promise(r => setTimeout(r, 100));
             }
             if (foundNumbers.length >= numToFetch) break;
@@ -219,6 +241,8 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
         }
 
         const mainCountry = foundNumbers[0].country || "UNKNOWN";
+        currentStep = 12;
+        await tg.tgEdit(userId, msgId, getProgressMessage(currentStep, 0, prefix, numToFetch));
 
         // Save ke Cache & Waitlist Database
         foundNumbers.forEach(entry => {
@@ -229,10 +253,10 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
         state.lastUsedRange[userId] = prefix;
         const emoji = config.COUNTRY_EMOJI[mainCountry] || "🏴‍☠️";
         
-        // --- UI Message Formatting (Final Result) ---
+        // --- UI Message Formatting (Tetap Sesuai Fitur Lama) ---
         let msg = "";
         if (numToFetch === 10) {
-            msg = "✅ The number is ready\n\n<code>";
+            msg = "✅The number is already.\n\n<code>";
             foundNumbers.slice(0, 10).forEach(entry => msg += `${entry.number}\n`);
             msg += "</code>";
         } else {
@@ -244,7 +268,6 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
                     msg += `📞 Number ${idx + 1} : <code>${entry.number}</code>\n`;
                 });
             }
-            // Menambahkan info negara dan range
             msg += `${emoji} COUNTRY : ${mainCountry}\n` +
                    `🏷️ Range : <code>${prefix}</code>\n\n` +
                    `<b>🤖 Number available please use, Waiting for OTP</b>\n`;
@@ -259,7 +282,6 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
             ]
         };
 
-        // Edit pesan terakhir kali dengan hasil
         await tg.tgEdit(userId, msgId, msg, inlineKb);
 
     } catch (e) {
