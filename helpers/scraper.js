@@ -32,7 +32,7 @@ function getProgressMessage(currentStep, totalSteps, prefixRange, numCount) {
     return `<code>${status}</code>\n<blockquote>Range: <code>${prefixRange}</code> | Jumlah: <code>${numCount}</code></blockquote>\n<code>Load:</code> [${bar}]`;
 }
 
-// --- Browser Control (Optimized for VPS) ---
+// --- Browser Control (OPTIMIZED & FIXED) ---
 
 async function initBrowser() {
     if (state.browser && state.browser.isConnected()) {
@@ -56,7 +56,6 @@ async function initBrowser() {
         ]
     });
 
-    // Berikan izin CLIPBOARD agar navigator.clipboard.readText() bisa bekerja
     const context = await state.browser.newContext({
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         permissions: ['clipboard-read', 'clipboard-write'] 
@@ -64,46 +63,39 @@ async function initBrowser() {
 
     state.sharedPage = await context.newPage();
 
-    // Blokir resource berat
+    // Blokir resource berat supaya ga timeout
     await state.sharedPage.route('**/*.{png,jpg,jpeg,gif,webp,svg,woff,woff2,ttf}', route => route.abort());
 
     try {
+        console.log("[BROWSER] Memulai proses login...");
         await performLogin(state.sharedPage, config.STEX_EMAIL, config.STEX_PASSWORD, config.LOGIN_URL);
-        console.log("[BROWSER] Login Success. Redirecting to GetNum...");
-        await state.sharedPage.goto(config.TARGET_URL, { waitUntil: 'domcontentloaded' });
+        
+        // Timeout dipercepat (commit navigasi) agar tidak gantung
+        console.log("[BROWSER] Navigasi ke Target URL...");
+        await state.sharedPage.goto(config.TARGET_URL, { 
+            waitUntil: 'commit', // Lebih cepat dari domcontentloaded
+            timeout: 15000 
+        });
+        
+        console.log("[BROWSER] Browser Ready.");
     } catch (e) {
-        console.error(`[BROWSER ERROR] Login/Redirect Failed: ${e.message}`);
+        console.error(`[BROWSER ERROR] Init Failed: ${e.message}`);
+        // Jika gagal navigasi, coba sekali lagi tanpa nunggu idle
+        try { await state.sharedPage.goto(config.TARGET_URL); } catch (e2) {}
     }
 }
 
-// Mengambil data via Clipboard (Jauh lebih cepat dari scraping DOM)
 async function getNumberFromClipboard(page) {
     try {
-        // Eksekusi script di dalam browser untuk membaca clipboard
         const clipboardContent = await page.evaluate(async () => {
-            try {
-                return await navigator.clipboard.readText();
-            } catch (err) {
-                return null;
-            }
+            return await navigator.clipboard.readText().catch(() => null);
         });
-
         if (!clipboardContent) return null;
-
-        const number = clipboardContent.replace(/[\s-]/g, "");
-        const normalized = number.startsWith('+') ? number : '+' + number;
-
-        // Validasi simpel apakah isi clipboard itu benar nomor telepon
-        if (/^\+\d{7,15}$/.test(normalized)) {
-            return normalized;
-        }
-        return null;
-    } catch (e) {
-        return null;
-    }
+        const normalized = normalizeNumber(clipboardContent);
+        return /^\+\d{7,15}$/.test(normalized) ? normalized : null;
+    } catch (e) { return null; }
 }
 
-// Fallback: Tetap simpan fungsi lama jika clipboard gagal/kosong
 async function getAllNumbersParallel(page, numToFetch) {
     try {
         const rowsData = await page.$$eval('tbody tr', (rows) => {
@@ -142,7 +134,7 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
     let actionInterval = null;
     const numToFetch = clickCount;
 
-    // --- OPTIMASI ANTREAN: Cek dulu baru kirim pesan ---
+    // Fix Antrean Delay
     const isWaitNeeded = playwrightLock.isLocked();
     if (isWaitNeeded) {
         const waitMsg = getProgressMessage(0, 0, prefix, numToFetch);
@@ -155,9 +147,7 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
     try {
         actionInterval = await actionTask(userId);
         let currentStep = 0;
-        const startOpTime = Date.now() / 1000;
 
-        // Jika tidak antri, kirim pesan awal sekarang
         if (!msgId) {
             msgId = await tg.tgSend(userId, getProgressMessage(currentStep, 0, prefix, numToFetch));
         }
@@ -170,35 +160,36 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
         const INPUT_SELECTOR = "input[name='numberrange']";
         const BUTTON_SELECTOR = "button:has-text('Get Number')";
 
-        // Step 1: Input
-        await page.waitForSelector(INPUT_SELECTOR, { state: 'visible', timeout: 10000 });
+        // Pastikan selector ada sebelum manipulasi
+        await page.waitForSelector(INPUT_SELECTOR, { state: 'visible', timeout: 5000 }).catch(() => {
+            console.log("Input range ga ketemu, coba refresh...");
+            return page.reload({ waitUntil: 'commit' });
+        });
+
         await page.fill(INPUT_SELECTOR, "");
         await page.fill(INPUT_SELECTOR, prefix);
         currentStep = 1;
-        
-        // Step 2: Click & Clipboard Capture
-        currentStep = 2;
+
         let foundNumbers = [];
+        let lastClipboard = "";
         const seenInThisSession = new Set();
 
         for (let i = 0; i < clickCount; i++) {
             await page.click(BUTTON_SELECTOR, { force: true });
-            
-            // Tunggu sebentar agar clipboard terisi oleh web
-            await new Promise(r => setTimeout(r, 400)); 
+            await new Promise(r => setTimeout(r, 600)); // Jeda biar clipboard keisi
             
             const num = await getNumberFromClipboard(page);
-            if (num && !db.isInCache(num) && !seenInThisSession.has(num)) {
+            if (num && num !== lastClipboard && !db.isInCache(num) && !seenInThisSession.has(num)) {
                 foundNumbers.push({ number: num, country: "DETECTING..." });
                 seenInThisSession.add(num);
+                lastClipboard = num;
             }
             
-            // Update Progress UI setiap klik
-            currentStep = Math.min(3 + i, 11);
+            currentStep = Math.min(2 + (i + 1), 11);
             await tg.tgEdit(userId, msgId, getProgressMessage(currentStep, 0, prefix, numToFetch));
         }
 
-        // Jika clipboard gagal/kosong, gunakan metode scraping sebagai backup
+        // Backup Scraper (Jika clipboard gagal)
         if (foundNumbers.length < numToFetch) {
             const backupNums = await getAllNumbersParallel(page, numToFetch);
             backupNums.forEach(bn => {
@@ -214,14 +205,12 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
             return;
         }
 
-        // Finalisasi data
         const finalNumbers = foundNumbers.slice(0, numToFetch);
         const mainCountry = finalNumbers[0].country !== "DETECTING..." ? finalNumbers[0].country : "UNKNOWN";
         
         currentStep = 12;
         await tg.tgEdit(userId, msgId, getProgressMessage(currentStep, 0, prefix, numToFetch));
 
-        // Save ke Cache & DB
         finalNumbers.forEach(entry => {
             db.saveCache({ number: entry.number, country: entry.country, user_id: userId, time: Date.now() });
             db.addToWaitList(entry.number, userId, usernameTg, firstNameTg);
@@ -230,7 +219,6 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
         state.lastUsedRange[userId] = prefix;
         const emoji = config.COUNTRY_EMOJI[mainCountry] || "🏳️";
         
-        // --- UI Message (Fitur Lama Tetap Ada) ---
         let msg = "";
         if (numToFetch === 10) {
             msg = "✅The number is already.\n\n<code>";
@@ -262,15 +250,11 @@ async function processUserInput(userId, prefix, clickCount, usernameTg, firstNam
 
     } catch (e) {
         console.error(`[PROCESS ERROR] ${e.message}`);
-        if (msgId) await tg.tgEdit(userId, msgId, `❌ Terjadi kesalahan: ${e.message}`);
+        if (msgId) await tg.tgEdit(userId, msgId, `❌ Terjadi kesalahan fatal. Coba /start lagi.`);
     } finally {
         if (actionInterval) clearInterval(actionInterval);
         release();
     }
 }
 
-module.exports = {
-    initBrowser,
-    processUserInput,
-    getProgressMessage
-};
+module.exports = { initBrowser, processUserInput, getProgressMessage };
