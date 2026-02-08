@@ -25,6 +25,7 @@ async function processCallback(cq) {
     const usernameTg = cq.from.username;
     const mention = usernameTg ? `@${usernameTg}` : `<a href='tg://user?id=${userId}'>${firstName}</a>`;
 
+    // ==== VERIFY ====
     if (dataCb === "verify") {
         if (!(await tg.isUserInBothGroups(userId))) {
             const kb = {
@@ -59,6 +60,7 @@ async function processCallback(cq) {
         return;
     }
 
+    // ==== GET NUMBER ====
     if (dataCb === "getnum") {
         if (!state.verifiedUsers.has(userId)) {
             await tg.tgEdit(chatId, menuMsgId, "⚠️ Harap verifikasi dulu.");
@@ -70,6 +72,7 @@ async function processCallback(cq) {
         return;
     }
 
+    // ==== MANUAL RANGE ====
     if (dataCb === "manual_range") {
         if (!state.verifiedUsers.has(userId)) return;
         state.manualRangeInput.add(userId);
@@ -78,14 +81,17 @@ async function processCallback(cq) {
         return;
     }
 
+    // ==== SELECT RANGE ====
     if (dataCb.startsWith("select_range:")) {
         if (!state.verifiedUsers.has(userId)) return;
         const prefix = dataCb.split(":")[1];
-        await tg.tgEdit(chatId, menuMsgId, scraper.getProgressMessage(0, 0, prefix, 1));
+        const msgText = scraper.getProgressMessage(prefix, 1);
+        await tg.tgEdit(chatId, menuMsgId, msgText);
         scraper.processUserInput(userId, prefix, 1, usernameTg, firstName, menuMsgId);
         return;
     }
 
+    // ==== CHANGE NUM ====
     if (dataCb.startsWith("change_num:")) {
         if (!state.verifiedUsers.has(userId)) return;
         const parts = dataCb.split(":");
@@ -96,6 +102,7 @@ async function processCallback(cq) {
         return;
     }
 
+    // ==== WITHDRAW ====
     if (dataCb === "withdraw_menu") {
         const prof = db.getUserProfile(userId, firstName);
         const msgWd = `<b>💸 Withdraw Money</b>\n\nSilahkan Pilih Jumlah Withdraw anda\n🧾 Dana: <code>${prof.dana}</code>\n👤 A/N : <code>${prof.dana_an}</code>\n💰 Balance: $${prof.balance.toFixed(6)}\n\n<i>Minimal Withdraw: $${config.MIN_WD_AMOUNT.toFixed(6)}</i>`;
