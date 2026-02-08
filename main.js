@@ -1,4 +1,4 @@
-Const { fork } = require('child_process');
+const { fork } = require('child_process');
 const cron = require('node-cron');
 const config = require('./config');
 const db = require('./helpers/database');
