@@ -1,4 +1,4 @@
-Const { chromium } = require('playwright');
+const { chromium } = require('playwright');
 const config = require('../config');
 const { performLogin } = require('../login.js');
 const { state, playwrightLock } = require('./state');
