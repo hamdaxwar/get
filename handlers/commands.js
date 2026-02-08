@@ -4,7 +4,6 @@ const tg = require('../helpers/telegram');
 const { state } = require('../helpers/state');
 const scraper = require('../helpers/scraper');
 const adminHandler = require('./admin');
-const fs = require('fs'); // Diperlukan untuk menyimpan settings.json
 
 async function processCommand(msg) {
     const chatId = msg.chat.id;
@@ -37,19 +36,6 @@ async function processCommand(msg) {
         } 
         else if (text === "/list") {
             await adminHandler.handleListUsers(userId);
-            return;
-        }
-        // --- FITUR BARU: ON/OFF BALANCE ---
-        else if (text === "/onbalance") {
-            const settings = { balance_enabled: true };
-            fs.writeFileSync('settings.json', JSON.stringify(settings, null, 2));
-            await tg.tgSend(userId, "🟢 <b>Sistem Saldo Diaktifkan.</b>\nReward $0.003500 akan masuk untuk setiap OTP (Kecuali WhatsApp).");
-            return;
-        }
-        else if (text === "/offbalance") {
-            const settings = { balance_enabled: false };
-            fs.writeFileSync('settings.json', JSON.stringify(settings, null, 2));
-            await tg.tgSend(userId, "🔴 <b>Sistem Saldo Dinonaktifkan.</b>\nUser tidak akan mendapatkan reward saldo tambahan sementara waktu.");
             return;
         }
     }
