@@ -15,6 +15,22 @@ async function handleRateLimit(e) {
     return false;
 }
 
+/**
+ * PENTING: Menjawab Callback Query agar loading di tombol hilang
+ */
+async function tgAnswerCallback(callbackQueryId, text = "", showAlert = false) {
+    const data = {
+        callback_query_id: callbackQueryId,
+        text: text,
+        show_alert: showAlert
+    };
+    try {
+        await axios.post(`${config.API_URL}/answerCallbackQuery`, data);
+    } catch (e) {
+        if (await handleRateLimit(e)) return tgAnswerCallback(callbackQueryId, text, showAlert);
+    }
+}
+
 async function tgSend(chatId, text, replyMarkup = null) {
     const data = { chat_id: chatId, text: text, parse_mode: "HTML" };
     if (replyMarkup) data.reply_markup = replyMarkup;
@@ -91,9 +107,6 @@ async function isUserInBothGroups(userId) {
     return g1 && g2;
 }
 
-/**
- * Fungsi Broadcast dengan Jeda 1 Detik per User
- */
 async function tgBroadcast(messageText, adminId) {
     const userIds = Array.from(db.loadUsers());
     let success = 0;
@@ -104,7 +117,6 @@ async function tgBroadcast(messageText, adminId) {
     for (let i = 0; i < userIds.length; i++) {
         const uid = userIds[i];
         
-        // Update status ke admin setiap 5 user agar admin tetap mendapat info progres
         if (i % 5 === 0 && adminMsgId) {
             await tgEdit(adminId, adminMsgId, `🔄 Siaran Sedang Berjalan...\n\n📊 Progress: <b>${i}/${userIds.length}</b>\n✅ Sukses: <b>${success}</b>\n❌ Gagal: <b>${fail}</b>`);
         }
@@ -117,7 +129,6 @@ async function tgBroadcast(messageText, adminId) {
             fail++;
         }
 
-        // JEDA 1 DETIK (1000ms) per user
         await new Promise(r => setTimeout(r, 1000));
     }
     
@@ -132,5 +143,5 @@ async function tgBroadcast(messageText, adminId) {
 
 module.exports = {
     tgSend, tgEdit, tgDelete, tgSendAction, tgGetUpdates,
-    isUserInGroup, isUserInBothGroups, tgBroadcast
+    isUserInGroup, isUserInBothGroups, tgBroadcast, tgAnswerCallback // Pastikan di-export
 };
