@@ -66,7 +66,7 @@
 <div style="display:flex; gap:6px; margin-top:6px;">
   <img src="https://img.shields.io/badge/Linux-black?style=for-the-badge&logo=linux&logoColor=white" />
   <img src="https://img.shields.io/badge/HTML5-black?style=for-the-badge&logo=html5&logoColor=orange" />
-</div>
+
 
 ## 🧩 SYSTEM LOG
 
@@ -90,6 +90,7 @@
     <img src="https://img.shields.io/badge/TELEGRAM-CONTACT-0088cc?style=for-the-badge"/>
   </a>
 </div>
+
 ---
 
 ## ⚠️ DISCLAIMER
