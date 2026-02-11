@@ -79,12 +79,17 @@
 
 ## 📡 CONNECT WITH ZURA
 
-<a href="https://zurastore.my.id"><img src="https://img.shields.io/badge/WEB_TOOLS-ONLINE-00ff9c?style=for-the-badge"/></a>
-<a href="https://zurastore.xyz"><img src="https://img.shields.io/badge/WEB_STORE-ONLINE-ff0055?style=for-the-badge"/></a>
-<a href="https://t.me/Imr1d"><img src="https://img.shields.io/badge/TELEGRAM-CONTACT-0088cc?style=for-the-badge"/></a>
-
----
-
+<div align="center">
+  <a href="https://zurastore.my.id">
+    <img src="https://img.shields.io/badge/WEB_TOOLS-ONLINE-00ff9c?style=for-the-badge"/>
+  </a>
+  <a href="https://zurastore.xyz">
+    <img src="https://img.shields.io/badge/WEB_STORE-ONLINE-ff0055?style=for-the-badge"/>
+  </a>
+  <a href="https://t.me/Imr1d">
+    <img src="https://img.shields.io/badge/TELEGRAM-CONTACT-0088cc?style=for-the-badge"/>
+  </a>
+</div>
 ## ⚠️ DISCLAIMER
 
 Project ini dibuat untuk edukasi, automation, dan pengembangan teknologi.  
