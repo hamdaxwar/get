@@ -90,6 +90,8 @@
     <img src="https://img.shields.io/badge/TELEGRAM-CONTACT-0088cc?style=for-the-badge"/>
   </a>
 </div>
+---
+
 ## ⚠️ DISCLAIMER
 
 Project ini dibuat untuk edukasi, automation, dan pengembangan teknologi.  
