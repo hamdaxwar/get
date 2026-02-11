@@ -16,6 +16,21 @@ async function handleRateLimit(e) {
 }
 
 /**
+ * Answer Callback Query (hilangkan loading tombol inline)
+ */
+async function tgAnswerCallback(callbackQueryId, text = "") {
+    try {
+        await axios.post(`${config.API_URL}/answerCallbackQuery`, {
+            callback_query_id: callbackQueryId,
+            text: text,
+            show_alert: false
+        });
+    } catch (e) {
+        await handleRateLimit(e);
+    }
+}
+
+/**
  * Send Message
  */
 async function tgSend(chatId, text, replyMarkup = null) {
@@ -188,10 +203,19 @@ async function tgBroadcast(messageText, adminId) {
     }
 
     const report = `✅ <b>Siaran Selesai!</b>\n\n🟢 Berhasil: <b>${success}</b>\n🔴 Gagal: <b>${fail}</b>`;
-    if (adminMsgId) await tgEdit(adminId, adminMsgId, report); else await tgSend(adminId, report);
+    if (adminMsgId) await tgEdit(adminId, adminMsgId, report);
+    else await tgSend(adminId, report);
 }
 
 module.exports = {
-    tgSend, tgEdit, tgDelete, tgSendAction, tgSendAnimation,
-    tgGetUpdates, isUserInGroup, isUserInBothGroups, tgBroadcast
+    tgSend,
+    tgEdit,
+    tgDelete,
+    tgSendAction,
+    tgSendAnimation,
+    tgGetUpdates,
+    isUserInGroup,
+    isUserInBothGroups,
+    tgBroadcast,
+    tgAnswerCallback // ✅ penting
 };
