@@ -2,110 +2,97 @@
 
 <img src="https://zura14.web.id/mptourl/botgift_1770672122.gif" width="520"/>
 
-███████╗██╗   ██╗██████╗  █████╗     ███████╗████████╗ ██████╗ ██████╗ ███████╗
-╚══███╔╝██║   ██║██╔══██╗██╔══██╗    ██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗██╔════╝
-  ███╔╝ ██║   ██║██████╔╝███████║    ███████╗   ██║   ██║   ██║██████╔╝█████╗  
- ███╔╝  ██║   ██║██╔══██╗██╔══██║    ╚════██║   ██║   ██║   ██║██╔══██╗██╔══╝  
-███████╗╚██████╔╝██║  ██║██║  ██║    ███████║   ██║   ╚██████╔╝██║  ██║███████╗
-╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝    ╚══════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝
+# ⚡ ZURA STORE ⚡
 
-[ DIGITAL SYSTEM • AUTOMATION • CYBER TOOLS ]
+**[ DIGITAL TOOLS • AUTOMATION • CYBER SYSTEM ]**
 
-<img src="https://img.shields.io/badge/MODE-CYBER-black?style=for-the-badge&logo=hackthebox&logoColor=00ff9c" />
-<img src="https://img.shields.io/badge/STATUS-ONLINE-00ff9c?style=for-the-badge" />
-<img src="https://img.shields.io/badge/AUTHOR-ZURA-ff003c?style=for-the-badge" />
-<img src="https://img.shields.io/badge/SECURITY-LEVEL:HIGH-00ff9c?style=for-the-badge" />
+<img src="https://img.shields.io/badge/HACKER-MODE-black?style=for-the-badge&logo=hackthebox&logoColor=green" />
+<img src="https://img.shields.io/badge/STATUS-ONLINE-green?style=for-the-badge" />
+<img src="https://img.shields.io/badge/AUTHOR-ZURA-red?style=for-the-badge" />
+<img src="https://img.shields.io/badge/SECURITY-HIGH-00ff9c?style=for-the-badge" />
 
 </div>
 
----------------------------------------------------------------------
+---
 
-[ SYSTEM CORE ]
+## 🧠 SYSTEM INFORMATION
 
-> Boot sequence initiated...
-> Loading cyber framework...
-> Connecting to main node...
-> Core status : ACTIVE
+> Booting ZURA CORE...  
+> Loading cyber modules...  
+> Connecting to main server...  
+> Status: ONLINE ✅  
 
----------------------------------------------------------------------
+---
 
-[ ABOUT PROJECT ]
+## 🚀 ABOUT ZURA STORE
 
-ZURA STORE adalah ekosistem digital yang menyediakan berbagai sistem otomatisasi,
-tool cyber, bot, script, API, dan custom APK dengan konsep futuristik & cyber architecture.
+**ZURA STORE** adalah platform digital yang menyediakan berbagai tools, script, bot, dan sistem otomatisasi dengan konsep cyber & hacker style.
 
-Core Direction :
-- Automation Engine Development
-- Bot & Script Architecture
-- Web Tools & API System
-- Android Application Builder
-- Cyber Utility Framework
+### Fokus utama:
+- Automation System
+- Bot & Script Development
+- Web Tools & API
+- Android APK Custom
+- Cyber Utilities
 
----------------------------------------------------------------------
+---
 
-[ ACCESS NODES ]
+## 🌐 ACCESS POINTS
 
-WEB TOOLS  : https://zurastore.my.id
-WEB STORE  : https://zurastore.xyz
-TELEGRAM   : https://t.me/Imr1d
+- 🌍 Web Tools : https://zurastore.my.id  
+- 🛒 Web Store : https://zurastore.xyz  
+- 💬 Telegram : https://t.me/Imr1d  
 
----------------------------------------------------------------------
+---
 
-[ SYSTEM FEATURES ]
+## ⚙️ FEATURES
 
-- Automated Bot System (Telegram / WhatsApp)
-- OTP & SMS Monitoring Engine
-- Web Tools & RESTful API
-- Android APK Custom Builder
-- Premium Script & Custom Tools
-- Cyber Security Utilities
+- 🤖 Bot Automation (Telegram / WhatsApp)
+- 🔐 OTP & SMS Monitoring System
+- 🌐 Web Tools & REST API
+- 📱 Android APK Builder
+- ⚡ Script Premium & Custom Tools
+- 🧠 Cyber Security Utilities
 
----------------------------------------------------------------------
+---
 
-[ TECHNOLOGY STACK ]
+## 💻 TECH STACK
 
-<img src="https://img.shields.io/badge/Node.js-000000?style=for-the-badge&logo=node.js&logoColor=00ff9c" />
-<img src="https://img.shields.io/badge/Python-000000?style=for-the-badge&logo=python&logoColor=ffd43b" />
-<img src="https://img.shields.io/badge/JavaScript-000000?style=for-the-badge&logo=javascript&logoColor=f7df1e" />
-<img src="https://img.shields.io/badge/Linux-000000?style=for-the-badge&logo=linux&logoColor=ffffff" />
-<img src="https://img.shields.io/badge/HTML5-000000?style=for-the-badge&logo=html5&logoColor=ff6a00" />
+<img src="https://img.shields.io/badge/Node.js-black?style=for-the-badge&logo=node.js&logoColor=green" />
+<img src="https://img.shields.io/badge/Python-black?style=for-the-badge&logo=python&logoColor=yellow" />
+<img src="https://img.shields.io/badge/JavaScript-black?style=for-the-badge&logo=javascript&logoColor=yellow" />
+<img src="https://img.shields.io/badge/Linux-black?style=for-the-badge&logo=linux&logoColor=white" />
+<img src="https://img.shields.io/badge/HTML5-black?style=for-the-badge&logo=html5&logoColor=orange" />
 
----------------------------------------------------------------------
+---
 
-[ SYSTEM LOG ]
+## 🧩 SYSTEM LOG
 
-> Initializing ZURA CORE MODULES...
-> Authentication granted
-> Loading modules [████████████████] 100%
-> System ready for operation
+> Initializing ZURA SYSTEM...  
+> Access Granted ✔  
+> Loading Modules ██████████ 100%  
+> System Ready ⚡  
 
----------------------------------------------------------------------
+---
 
-[ CONNECT ]
+## 📡 CONNECT WITH ZURA
 
-<a href="https://zurastore.my.id"><img src="https://img.shields.io/badge/WEB_TOOLS-ACCESS-00ff9c?style=for-the-badge"/></a>
-<a href="https://zurastore.xyz"><img src="https://img.shields.io/badge/WEB_STORE-ACCESS-ff003c?style=for-the-badge"/></a>
+<a href="https://zurastore.my.id"><img src="https://img.shields.io/badge/WEB_TOOLS-ONLINE-00ff9c?style=for-the-badge"/></a>
+<a href="https://zurastore.xyz"><img src="https://img.shields.io/badge/WEB_STORE-ONLINE-ff0055?style=for-the-badge"/></a>
 <a href="https://t.me/Imr1d"><img src="https://img.shields.io/badge/TELEGRAM-CONTACT-0088cc?style=for-the-badge"/></a>
 
----------------------------------------------------------------------
+---
 
-[ DISCLAIMER ]
+## ⚠️ DISCLAIMER
 
-This project is created for educational purposes, automation systems,
-and technology development. Use responsibly and ethically.
+Project ini dibuat untuk edukasi, automation, dan pengembangan teknologi.  
+Gunakan dengan bijak dan tanggung jawab penuh.
 
----------------------------------------------------------------------
+---
 
 <div align="center">
 
-███████╗██╗   ██╗██████╗  █████╗     ███████╗██╗   ██╗███████╗████████╗███████╗███╗   ███╗
-╚══███╔╝██║   ██║██╔══██╗██╔══██╗    ██╔════╝╚██╗ ██╔╝██╔════╝╚══██╔══╝██╔════╝████╗ ████║
-  ███╔╝ ██║   ██║██████╔╝███████║    ███████╗ ╚████╔╝ ███████╗   ██║   █████╗  ██╔████╔██║
- ███╔╝  ██║   ██║██╔══██╗██╔══██║    ╚════██║  ╚██╔╝  ╚════██║   ██║   ██╔══╝  ██║╚██╔╝██║
-███████╗╚██████╔╝██║  ██║██║  ██║    ███████║   ██║   ███████║   ██║   ███████╗██║ ╚═╝ ██║
-╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝    ╚══════╝   ╚═╝   ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═╝
-
-SYSTEM STATUS : ACTIVE
+### ☠ ZURA STORE SYSTEM ACTIVE ☠
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:00ff9c,100:000000&height=120&section=footer"/>
 
