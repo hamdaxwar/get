@@ -1,63 +1,99 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/ZURA-STORE-blueviolet?style=for-the-badge&logo=github" />
+<img src="https://zura14.web.id/mptourl/botgift_1770672122.gif" width="520"/>
 
-<h1>🛒 ZURA STORE</h1>
+# ⚡ ZURA STORE ⚡
 
-<p><b>Digital Store • Automation • Tools • Scripts</b></p>
+**[ DIGITAL TOOLS • AUTOMATION • CYBER SYSTEM ]**
 
-<p>
-  <img src="https://img.shields.io/badge/Status-Online-success?style=flat-square" />
-  <img src="https://img.shields.io/badge/Version-1.0-blue?style=flat-square" />
-  <img src="https://img.shields.io/badge/Author-Zura-orange?style=flat-square" />
-</p>
+<img src="https://img.shields.io/badge/HACKER-MODE-black?style=for-the-badge&logo=hackthebox&logoColor=green" />
+<img src="https://img.shields.io/badge/STATUS-ONLINE-green?style=for-the-badge" />
+<img src="https://img.shields.io/badge/AUTHOR-ZURA-red?style=for-the-badge" />
+<img src="https://img.shields.io/badge/SECURITY-HIGH-00ff9c?style=for-the-badge" />
 
 </div>
 
 ---
 
-## 🚀 Tentang ZURA STORE
+## 🧠 SYSTEM INFORMATION
 
-**ZURA STORE** adalah platform digital yang menyediakan berbagai tools, script, dan layanan otomatisasi dengan kualitas terbaik.
-
-✨ Fokus utama:
-- Automation Tools
-- Bot & Script
-- Web & App Development
-- Digital Services
+> Booting ZURA CORE...  
+> Loading cyber modules...  
+> Connecting to main server...  
+> Status: ONLINE ✅  
 
 ---
 
-## 📦 Produk & Layanan
+## 🚀 ABOUT ZURA STORE
 
-- 🤖 Bot Telegram / WhatsApp
-- 🔐 OTP & Automation System
-- 🌐 Web Tools & API
-- 📱 APK Android Custom
-- ⚙️ Script Premium
-- https://zurastore.my.id
-- https://zurastore.xyz
+**ZURA STORE** adalah platform digital yang menyediakan berbagai tools, script, bot, dan sistem otomatisasi dengan konsep cyber & hacker style.
 
----
-
-## 🛠️ Teknologi yang Digunakan
-
-<p align="center">
-  <img src="https://img.shields.io/badge/JavaScript-yellow?style=for-the-badge&logo=javascript" />
-  <img src="https://img.shields.io/badge/Node.js-green?style=for-the-badge&logo=node.js" />
-  <img src="https://img.shields.io/badge/Python-blue?style=for-the-badge&logo=python" />
-  <img src="https://img.shields.io/badge/HTML5-orange?style=for-the-badge&logo=html5" />
-  <img src="https://img.shields.io/badge/Linux-black?style=for-the-badge&logo=linux" />
-</p>
+### Fokus utama:
+- Automation System
+- Bot & Script Development
+- Web Tools & API
+- Android APK Custom
+- Cyber Utilities
 
 ---
 
-## 📥 Cara Install
+## 🌐 ACCESS POINTS
 
-```bash
-git clone https://github.com/username/zura-store.git
+- 🌍 Web Tools : https://zurastore.my.id  
+- 🛒 Web Store : https://zurastore.xyz  
+- 💬 Telegram : https://t.me/Imr1d  
 
-```bash
-cd zura-store
-npm install
-npm start
+---
+
+## ⚙️ FEATURES
+
+- 🤖 Bot Automation (Telegram / WhatsApp)
+- 🔐 OTP & SMS Monitoring System
+- 🌐 Web Tools & REST API
+- 📱 Android APK Builder
+- ⚡ Script Premium & Custom Tools
+- 🧠 Cyber Security Utilities
+
+---
+
+## 💻 TECH STACK
+
+<img src="https://img.shields.io/badge/Node.js-black?style=for-the-badge&logo=node.js&logoColor=green" />
+<img src="https://img.shields.io/badge/Python-black?style=for-the-badge&logo=python&logoColor=yellow" />
+<img src="https://img.shields.io/badge/JavaScript-black?style=for-the-badge&logo=javascript&logoColor=yellow" />
+<img src="https://img.shields.io/badge/Linux-black?style=for-the-badge&logo=linux&logoColor=white" />
+<img src="https://img.shields.io/badge/HTML5-black?style=for-the-badge&logo=html5&logoColor=orange" />
+
+---
+
+## 🧩 SYSTEM LOG
+
+> Initializing ZURA SYSTEM...  
+> Access Granted ✔  
+> Loading Modules ██████████ 100%  
+> System Ready ⚡  
+
+---
+
+## 📡 CONNECT WITH ZURA
+
+<a href="https://zurastore.my.id"><img src="https://img.shields.io/badge/WEB_TOOLS-ONLINE-00ff9c?style=for-the-badge"/></a>
+<a href="https://zurastore.xyz"><img src="https://img.shields.io/badge/WEB_STORE-ONLINE-ff0055?style=for-the-badge"/></a>
+<a href="https://t.me/Imr1d"><img src="https://img.shields.io/badge/TELEGRAM-CONTACT-0088cc?style=for-the-badge"/></a>
+
+---
+
+## ⚠️ DISCLAIMER
+
+Project ini dibuat untuk edukasi, automation, dan pengembangan teknologi.  
+Gunakan dengan bijak dan tanggung jawab penuh.
+
+---
+
+<div align="center">
+
+### ☠ ZURA STORE SYSTEM ACTIVE ☠
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:00ff9c,100:000000&height=120&section=footer"/>
+
+</div>
