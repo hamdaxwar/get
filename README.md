@@ -35,6 +35,8 @@
 - 🌐 Web Tools & API
 - 📱 APK Android Custom
 - ⚙️ Script Premium
+- https://zurastore.my.id
+- https://zurastore.xyz
 
 ---
 
@@ -54,6 +56,8 @@
 
 ```bash
 git clone https://github.com/username/zura-store.git
+
+```bash
 cd zura-store
 npm install
 npm start
