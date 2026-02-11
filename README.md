@@ -1,99 +1,44 @@
 <div align="center">
-
-<img src="https://zura14.web.id/mptourl/botgift_1770672122.gif" width="520"/>
-
-# ⚡ ZURA STORE ⚡
-
-**[ DIGITAL TOOLS • AUTOMATION • CYBER SYSTEM ]**
-
-<img src="https://img.shields.io/badge/HACKER-MODE-black?style=for-the-badge&logo=hackthebox&logoColor=green" />
-<img src="https://img.shields.io/badge/STATUS-ONLINE-green?style=for-the-badge" />
-<img src="https://img.shields.io/badge/AUTHOR-ZURA-red?style=for-the-badge" />
-<img src="https://img.shields.io/badge/SECURITY-HIGH-00ff9c?style=for-the-badge" />
-
+<img src="https://zura14.web.id/mptourl/botgift_1770672122.gif" width="550"/>
+<samp>⚡ ZURA ΣXΞCUTION ⚡</samp>
+[ DIGITAL ARCHITECT • AUTOMATION NEURAL • CYBER OPS ]
+<img src="https://www.google.com/search?q=https://img.shields.io/badge/SYSTEM-ACTIVE-00ff9c%3Fstyle%3Dfor-the-badge%26logo%3Dtarget%26logoColor%3Dblack" />
+<img src="https://www.google.com/search?q=https://img.shields.io/badge/PROTOCOL-ENCRYPTED-ff0055%3Fstyle%3Dfor-the-badge%26logo%3Dskyliner%26logoColor%3Dwhite" />
+<img src="https://www.google.com/search?q=https://img.shields.io/badge/ACCESS-ROOT-white%3Fstyle%3Dfor-the-badge%26logo%3Dlinux%26logoColor%3Dblack" />
 </div>
-
----
-
-## 🧠 SYSTEM INFORMATION
-
-> Booting ZURA CORE...  
-> Loading cyber modules...  
-> Connecting to main server...  
-> Status: ONLINE ✅  
-
----
-
-## 🚀 ABOUT ZURA STORE
-
-**ZURA STORE** adalah platform digital yang menyediakan berbagai tools, script, bot, dan sistem otomatisasi dengan konsep cyber & hacker style.
-
-### Fokus utama:
-- Automation System
-- Bot & Script Development
-- Web Tools & API
-- Android APK Custom
-- Cyber Utilities
-
----
-
-## 🌐 ACCESS POINTS
-
-- 🌍 Web Tools : https://zurastore.my.id  
-- 🛒 Web Store : https://zurastore.xyz  
-- 💬 Telegram : https://t.me/Imr1d  
-
----
-
-## ⚙️ FEATURES
-
-- 🤖 Bot Automation (Telegram / WhatsApp)
-- 🔐 OTP & SMS Monitoring System
-- 🌐 Web Tools & REST API
-- 📱 Android APK Builder
-- ⚡ Script Premium & Custom Tools
-- 🧠 Cyber Security Utilities
-
----
-
-## 💻 TECH STACK
-
-<img src="https://img.shields.io/badge/Node.js-black?style=for-the-badge&logo=node.js&logoColor=green" />
-<img src="https://img.shields.io/badge/Python-black?style=for-the-badge&logo=python&logoColor=yellow" />
-<img src="https://img.shields.io/badge/JavaScript-black?style=for-the-badge&logo=javascript&logoColor=yellow" />
-<img src="https://img.shields.io/badge/Linux-black?style=for-the-badge&logo=linux&logoColor=white" />
-<img src="https://img.shields.io/badge/HTML5-black?style=for-the-badge&logo=html5&logoColor=orange" />
-
----
-
-## 🧩 SYSTEM LOG
-
-> Initializing ZURA SYSTEM...  
-> Access Granted ✔  
-> Loading Modules ██████████ 100%  
-> System Ready ⚡  
-
----
-
-## 📡 CONNECT WITH ZURA
-
-<a href="https://zurastore.my.id"><img src="https://img.shields.io/badge/WEB_TOOLS-ONLINE-00ff9c?style=for-the-badge"/></a>
-<a href="https://zurastore.xyz"><img src="https://img.shields.io/badge/WEB_STORE-ONLINE-ff0055?style=for-the-badge"/></a>
-<a href="https://t.me/Imr1d"><img src="https://img.shields.io/badge/TELEGRAM-CONTACT-0088cc?style=for-the-badge"/></a>
-
----
-
-## ⚠️ DISCLAIMER
-
-Project ini dibuat untuk edukasi, automation, dan pengembangan teknologi.  
-Gunakan dengan bijak dan tanggung jawab penuh.
-
----
+<samp>🧬 KERNEL INFORMATION</samp>
+> [i] Initializing ZURA Virtual Machine... > [i] Loading encrypted neural modules... > [i] Establishing handshake with Mainframe... > [>] Status: <kbd>ONLINE</kbd> [10.0.0.1/TCP]
+> 
+<samp>🛰️ MISSION OBJECTIVE</samp>
+ZURA STORE adalah digital hub tingkat lanjut yang berfokus pada pengembangan instrumen otomasi, skrip kustom, dan ekosistem siber dengan standar keamanan tinggi.
+<samp>PRIMARY SECTORS</samp>
+ * 0x01 Advanced Automation - Sistem tanpa interaksi manusia.
+ * 0x02 Neural Bot Dev - Pengembangan kecerdasan bot Telegram/WA.
+ * 0x03 API Orchestration - Integrasi Web Tools & RESTful API.
+ * 0x04 Mobile Modding - Rekayasa Android APK Custom.
+<samp>⚡ CORE FEATURES</samp>
+| Feature | Description | Status |
+|---|---|---|
+| AUTOBOT | Full-scale Telegram/WA Automation | DEPLOYED |
+| MONITOR | Real-time OTP & SMS Log System | ACTIVE |
+| TOOLKIT | Cyber Security & Web Utilities | STABLE |
+| BUILDER | Automated APK Compiler System | READY |
+<samp>💻 NEON TECH STACK</samp>
+<img src="https://www.google.com/search?q=https://img.shields.io/badge/NODE.JS-000000%3Fstyle%3Dfor-the-badge%26logo%3Dnode.js%26logoColor%3D00ff9c" /> <img src="https://www.google.com/search?q=https://img.shields.io/badge/PYTHON-000000%3Fstyle%3Dfor-the-badge%26logo%3Dpython%26logoColor%3D3776AB" /> <img src="https://www.google.com/search?q=https://img.shields.io/badge/JAVASCRIPT-000000%3Fstyle%3Dfor-the-badge%26logo%3Djavascript%26logoColor%3DF7DF1E" /> <img src="https://www.google.com/search?q=https://img.shields.io/badge/TYPESCRIPT-000000%3Fstyle%3Dfor-the-badge%26logo%3Dtypescript%26logoColor%3D3178C6" /> <img src="https://www.google.com/search?q=https://img.shields.io/badge/DOCKER-000000%3Fstyle%3Dfor-the-badge%26logo%3Ddocker%26logoColor%3D2496ED" />
+<samp>🔗 ACCESS GATEWAYS</samp>
+ * 🌐 Web Tools Interface : https://zurastore.my.id
+ * 🛒 Main Warehouse : https://zurastore.xyz
+ * 📡 Encrypted Channel : https://t.me/Imr1d
+<samp>🛠️ LOG TERMINAL</samp>
+$ sudo systemctl start zura-core
+[OK] Initializing modules...
+[OK] Bypassing firewall...
+[OK] Synchronizing with Zura Cloud...
+[OK] SYSTEM READY: ENJOY THE POWER ⚡
 
 <div align="center">
-
-### ☠ ZURA STORE SYSTEM ACTIVE ☠
-
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:00ff9c,100:000000&height=120&section=footer"/>
-
+<a href="https://zurastore.my.id"><img src="https://www.google.com/search?q=https://img.shields.io/badge/WEB_TOOLS-ACCESS_GRANTED-00ff9c%3Fstyle%3Dfor-the-badge%26logo%3Dgoogle-chrome%26logoColor%3Dblack"/></a>
+<a href="https://t.me/Imr1d"><img src="https://www.google.com/search?q=https://img.shields.io/badge/CONNECT-TELEGRAM-0088cc%3Fstyle%3Dfor-the-badge%26logo%3Dtelegram%26logoColor%3Dwhite"/></a>
+<samp>☠ [ TERMINATING SESSION ] ☠</samp>
+<img src="https://www.google.com/search?q=https://capsule-render.vercel.app/api%3Ftype%3Dwaving%26color%3D0:ff0055,100:00ff9c%26height%3D100%26section%3Dfooter"/>
 </div>
