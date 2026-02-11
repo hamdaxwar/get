@@ -58,13 +58,15 @@
 
 ## 💻 TECH STACK
 
-<img src="https://img.shields.io/badge/Node.js-black?style=for-the-badge&logo=node.js&logoColor=green" />
-<img src="https://img.shields.io/badge/Python-black?style=for-the-badge&logo=python&logoColor=yellow" />
-<img src="https://img.shields.io/badge/JavaScript-black?style=for-the-badge&logo=javascript&logoColor=yellow" />
-<img src="https://img.shields.io/badge/Linux-black?style=for-the-badge&logo=linux&logoColor=white" />
-<img src="https://img.shields.io/badge/HTML5-black?style=for-the-badge&logo=html5&logoColor=orange" />
-
----
+<div style="display:flex; gap:6px; flex-wrap:wrap;">
+  <img src="https://img.shields.io/badge/Node.js-black?style=for-the-badge&logo=node.js&logoColor=green" />
+  <img src="https://img.shields.io/badge/Python-black?style=for-the-badge&logo=python&logoColor=yellow" />
+  <img src="https://img.shields.io/badge/JavaScript-black?style=for-the-badge&logo=javascript&logoColor=yellow" />
+</div>
+<div style="display:flex; gap:6px; margin-top:6px;">
+  <img src="https://img.shields.io/badge/Linux-black?style=for-the-badge&logo=linux&logoColor=white" />
+  <img src="https://img.shields.io/badge/HTML5-black?style=for-the-badge&logo=html5&logoColor=orange" />
+</div>
 
 ## 🧩 SYSTEM LOG
 
