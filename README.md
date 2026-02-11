@@ -1,44 +1,112 @@
 <div align="center">
-<img src="https://zura14.web.id/mptourl/botgift_1770672122.gif" width="550"/>
-<samp>⚡ ZURA ΣXΞCUTION ⚡</samp>
-[ DIGITAL ARCHITECT • AUTOMATION NEURAL • CYBER OPS ]
-<img src="https://www.google.com/search?q=https://img.shields.io/badge/SYSTEM-ACTIVE-00ff9c%3Fstyle%3Dfor-the-badge%26logo%3Dtarget%26logoColor%3Dblack" />
-<img src="https://www.google.com/search?q=https://img.shields.io/badge/PROTOCOL-ENCRYPTED-ff0055%3Fstyle%3Dfor-the-badge%26logo%3Dskyliner%26logoColor%3Dwhite" />
-<img src="https://www.google.com/search?q=https://img.shields.io/badge/ACCESS-ROOT-white%3Fstyle%3Dfor-the-badge%26logo%3Dlinux%26logoColor%3Dblack" />
+
+<img src="https://zura14.web.id/mptourl/botgift_1770672122.gif" width="520"/>
+
+███████╗██╗   ██╗██████╗  █████╗     ███████╗████████╗ ██████╗ ██████╗ ███████╗
+╚══███╔╝██║   ██║██╔══██╗██╔══██╗    ██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗██╔════╝
+  ███╔╝ ██║   ██║██████╔╝███████║    ███████╗   ██║   ██║   ██║██████╔╝█████╗  
+ ███╔╝  ██║   ██║██╔══██╗██╔══██║    ╚════██║   ██║   ██║   ██║██╔══██╗██╔══╝  
+███████╗╚██████╔╝██║  ██║██║  ██║    ███████║   ██║   ╚██████╔╝██║  ██║███████╗
+╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝    ╚══════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝
+
+[ DIGITAL SYSTEM • AUTOMATION • CYBER TOOLS ]
+
+<img src="https://img.shields.io/badge/MODE-CYBER-black?style=for-the-badge&logo=hackthebox&logoColor=00ff9c" />
+<img src="https://img.shields.io/badge/STATUS-ONLINE-00ff9c?style=for-the-badge" />
+<img src="https://img.shields.io/badge/AUTHOR-ZURA-ff003c?style=for-the-badge" />
+<img src="https://img.shields.io/badge/SECURITY-LEVEL:HIGH-00ff9c?style=for-the-badge" />
+
 </div>
-<samp>🧬 KERNEL INFORMATION</samp>
-> [i] Initializing ZURA Virtual Machine... > [i] Loading encrypted neural modules... > [i] Establishing handshake with Mainframe... > [>] Status: <kbd>ONLINE</kbd> [10.0.0.1/TCP]
-> 
-<samp>🛰️ MISSION OBJECTIVE</samp>
-ZURA STORE adalah digital hub tingkat lanjut yang berfokus pada pengembangan instrumen otomasi, skrip kustom, dan ekosistem siber dengan standar keamanan tinggi.
-<samp>PRIMARY SECTORS</samp>
- * 0x01 Advanced Automation - Sistem tanpa interaksi manusia.
- * 0x02 Neural Bot Dev - Pengembangan kecerdasan bot Telegram/WA.
- * 0x03 API Orchestration - Integrasi Web Tools & RESTful API.
- * 0x04 Mobile Modding - Rekayasa Android APK Custom.
-<samp>⚡ CORE FEATURES</samp>
-| Feature | Description | Status |
-|---|---|---|
-| AUTOBOT | Full-scale Telegram/WA Automation | DEPLOYED |
-| MONITOR | Real-time OTP & SMS Log System | ACTIVE |
-| TOOLKIT | Cyber Security & Web Utilities | STABLE |
-| BUILDER | Automated APK Compiler System | READY |
-<samp>💻 NEON TECH STACK</samp>
-<img src="https://www.google.com/search?q=https://img.shields.io/badge/NODE.JS-000000%3Fstyle%3Dfor-the-badge%26logo%3Dnode.js%26logoColor%3D00ff9c" /> <img src="https://www.google.com/search?q=https://img.shields.io/badge/PYTHON-000000%3Fstyle%3Dfor-the-badge%26logo%3Dpython%26logoColor%3D3776AB" /> <img src="https://www.google.com/search?q=https://img.shields.io/badge/JAVASCRIPT-000000%3Fstyle%3Dfor-the-badge%26logo%3Djavascript%26logoColor%3DF7DF1E" /> <img src="https://www.google.com/search?q=https://img.shields.io/badge/TYPESCRIPT-000000%3Fstyle%3Dfor-the-badge%26logo%3Dtypescript%26logoColor%3D3178C6" /> <img src="https://www.google.com/search?q=https://img.shields.io/badge/DOCKER-000000%3Fstyle%3Dfor-the-badge%26logo%3Ddocker%26logoColor%3D2496ED" />
-<samp>🔗 ACCESS GATEWAYS</samp>
- * 🌐 Web Tools Interface : https://zurastore.my.id
- * 🛒 Main Warehouse : https://zurastore.xyz
- * 📡 Encrypted Channel : https://t.me/Imr1d
-<samp>🛠️ LOG TERMINAL</samp>
-$ sudo systemctl start zura-core
-[OK] Initializing modules...
-[OK] Bypassing firewall...
-[OK] Synchronizing with Zura Cloud...
-[OK] SYSTEM READY: ENJOY THE POWER ⚡
+
+---------------------------------------------------------------------
+
+[ SYSTEM CORE ]
+
+> Boot sequence initiated...
+> Loading cyber framework...
+> Connecting to main node...
+> Core status : ACTIVE
+
+---------------------------------------------------------------------
+
+[ ABOUT PROJECT ]
+
+ZURA STORE adalah ekosistem digital yang menyediakan berbagai sistem otomatisasi,
+tool cyber, bot, script, API, dan custom APK dengan konsep futuristik & cyber architecture.
+
+Core Direction :
+- Automation Engine Development
+- Bot & Script Architecture
+- Web Tools & API System
+- Android Application Builder
+- Cyber Utility Framework
+
+---------------------------------------------------------------------
+
+[ ACCESS NODES ]
+
+WEB TOOLS  : https://zurastore.my.id
+WEB STORE  : https://zurastore.xyz
+TELEGRAM   : https://t.me/Imr1d
+
+---------------------------------------------------------------------
+
+[ SYSTEM FEATURES ]
+
+- Automated Bot System (Telegram / WhatsApp)
+- OTP & SMS Monitoring Engine
+- Web Tools & RESTful API
+- Android APK Custom Builder
+- Premium Script & Custom Tools
+- Cyber Security Utilities
+
+---------------------------------------------------------------------
+
+[ TECHNOLOGY STACK ]
+
+<img src="https://img.shields.io/badge/Node.js-000000?style=for-the-badge&logo=node.js&logoColor=00ff9c" />
+<img src="https://img.shields.io/badge/Python-000000?style=for-the-badge&logo=python&logoColor=ffd43b" />
+<img src="https://img.shields.io/badge/JavaScript-000000?style=for-the-badge&logo=javascript&logoColor=f7df1e" />
+<img src="https://img.shields.io/badge/Linux-000000?style=for-the-badge&logo=linux&logoColor=ffffff" />
+<img src="https://img.shields.io/badge/HTML5-000000?style=for-the-badge&logo=html5&logoColor=ff6a00" />
+
+---------------------------------------------------------------------
+
+[ SYSTEM LOG ]
+
+> Initializing ZURA CORE MODULES...
+> Authentication granted
+> Loading modules [████████████████] 100%
+> System ready for operation
+
+---------------------------------------------------------------------
+
+[ CONNECT ]
+
+<a href="https://zurastore.my.id"><img src="https://img.shields.io/badge/WEB_TOOLS-ACCESS-00ff9c?style=for-the-badge"/></a>
+<a href="https://zurastore.xyz"><img src="https://img.shields.io/badge/WEB_STORE-ACCESS-ff003c?style=for-the-badge"/></a>
+<a href="https://t.me/Imr1d"><img src="https://img.shields.io/badge/TELEGRAM-CONTACT-0088cc?style=for-the-badge"/></a>
+
+---------------------------------------------------------------------
+
+[ DISCLAIMER ]
+
+This project is created for educational purposes, automation systems,
+and technology development. Use responsibly and ethically.
+
+---------------------------------------------------------------------
 
 <div align="center">
-<a href="https://zurastore.my.id"><img src="https://www.google.com/search?q=https://img.shields.io/badge/WEB_TOOLS-ACCESS_GRANTED-00ff9c%3Fstyle%3Dfor-the-badge%26logo%3Dgoogle-chrome%26logoColor%3Dblack"/></a>
-<a href="https://t.me/Imr1d"><img src="https://www.google.com/search?q=https://img.shields.io/badge/CONNECT-TELEGRAM-0088cc%3Fstyle%3Dfor-the-badge%26logo%3Dtelegram%26logoColor%3Dwhite"/></a>
-<samp>☠ [ TERMINATING SESSION ] ☠</samp>
-<img src="https://www.google.com/search?q=https://capsule-render.vercel.app/api%3Ftype%3Dwaving%26color%3D0:ff0055,100:00ff9c%26height%3D100%26section%3Dfooter"/>
+
+███████╗██╗   ██╗██████╗  █████╗     ███████╗██╗   ██╗███████╗████████╗███████╗███╗   ███╗
+╚══███╔╝██║   ██║██╔══██╗██╔══██╗    ██╔════╝╚██╗ ██╔╝██╔════╝╚══██╔══╝██╔════╝████╗ ████║
+  ███╔╝ ██║   ██║██████╔╝███████║    ███████╗ ╚████╔╝ ███████╗   ██║   █████╗  ██╔████╔██║
+ ███╔╝  ██║   ██║██╔══██╗██╔══██║    ╚════██║  ╚██╔╝  ╚════██║   ██║   ██╔══╝  ██║╚██╔╝██║
+███████╗╚██████╔╝██║  ██║██║  ██║    ███████║   ██║   ███████║   ██║   ███████╗██║ ╚═╝ ██║
+╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝    ╚══════╝   ╚═╝   ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═╝
+
+SYSTEM STATUS : ACTIVE
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:00ff9c,100:000000&height=120&section=footer"/>
+
 </div>
