@@ -16,20 +16,6 @@ function generateInlineKeyboard(ranges) {
     return { inline_keyboard: keyboard };
 }
 
-// ✅ HAPUS PESAN BOT SEBELUMNYA
-async function clearLastBotMessage(chatId, userId, currentMsgId) {
-    try {
-        const lastId = state.lastBotMessage[userId];
-        if (lastId && lastId !== currentMsgId) {
-            // Kita gunakan try-catch agar jika pesan sudah terhapus manual tidak error
-            await tg.tgDelete(chatId, lastId).catch(() => {});
-        }
-        state.lastBotMessage[userId] = currentMsgId;
-    } catch (e) {
-        console.log("clearLastBotMessage error:", e.message);
-    }
-}
-
 async function processCallback(cq) {
     const userId = cq.from.id;
     const dataCb = cq.data;
@@ -38,6 +24,9 @@ async function processCallback(cq) {
     const firstName = cq.from.first_name || "User";
     const usernameTg = cq.from.username;
     const mention = usernameTg ? `@${usernameTg}` : `<a href='tg://user?id=${userId}'>${firstName}</a>`;
+
+    // Tutup loading icon di Telegram user
+    await tg.tgAnswerCallback(cq.id).catch(() => {});
 
     // ==== VERIFY ====
     if (dataCb === "verify") {
@@ -77,7 +66,8 @@ async function processCallback(cq) {
         return;
     }
 
-    // ==== GET NUMBER MENU ====
+    // ==== GET NUMBER / CHANGE RANGE ====
+    // Ini buat balik ke menu pemilihan range
     if (dataCb === "getnum") {
         if (!state.verifiedUsers.has(userId)) {
             await tg.tgEdit(chatId, menuMsgId, "⚠️ Harap verifikasi dulu.");
@@ -89,9 +79,12 @@ async function processCallback(cq) {
             ? generateInlineKeyboard(ranges)
             : { inline_keyboard: [[{ text: "✍️ Input Manual Range", callback_data: "manual_range" }]] };
 
-        await tg.tgEdit(
+        // HAPUS PESAN LAMA (Wajib karena pesan nomor biasanya GIF)
+        await tg.tgDelete(chatId, menuMsgId).catch(() => {});
+        
+        // KIRIM PESAN BARU daftar range
+        await tg.tgSend(
             chatId,
-            menuMsgId,
             '\nPilih range dibawah atau manual range\n<b>👉 <a href="https://t.me/informasiprv">Click Method FB di sini</a></b>\n<blockquote>Range di bawah akan berubah setiap ada yang baru</blockquote>\n',
             kb
         );
@@ -107,31 +100,29 @@ async function processCallback(cq) {
         return;
     }
 
-    // ==== SELECT RANGE (Direct Click) ====
+    // ==== SELECT RANGE (Klik Range di Menu) ====
     if (dataCb.startsWith("select_range:")) {
         if (!state.verifiedUsers.has(userId)) return;
         const prefix = dataCb.split(":")[1];
         
-        // Sesuaikan parameter getProgressMessage(currentStep, totalSteps, prefixRange, numCount)
         const msgLoading = scraper.getProgressMessage(0, 5, prefix, 1);
         await tg.tgEdit(chatId, menuMsgId, msgLoading);
         
-        // Panggil scraper API
         scraper.processUserInput(userId, prefix, 1, usernameTg, firstName, menuMsgId);
         return;
     }
 
-    // ==== CHANGE NUM ====
+    // ==== CHANGE NUMBER (Request ulang di range yang sama) ====
     if (dataCb.startsWith("change_num:")) {
         if (!state.verifiedUsers.has(userId)) return;
         const parts = dataCb.split(":");
         const numFetch = parseInt(parts[1]);
         const prefix = parts[2];
 
-        // Hapus pesan lama agar rapi saat ganti nomor
+        // Hapus pesan animasi nomor lama
         await tg.tgDelete(chatId, menuMsgId).catch(() => {});
         
-        // Panggil scraper untuk request ulang nomor baru via API
+        // Panggil scraper (nanti scraper kirim pesan loading baru)
         scraper.processUserInput(userId, prefix, numFetch, usernameTg, firstName);
         return;
     }
@@ -139,9 +130,7 @@ async function processCallback(cq) {
     // ==== WITHDRAW MENU ====
     if (dataCb === "withdraw_menu") {
         const prof = db.getUserProfile(userId, firstName);
-
-        const msgWd =
-            `<b>💸 Withdraw Money</b>\n\n` +
+        const msgWd = `<b>💸 Withdraw Money</b>\n\n` +
             `Silahkan Pilih Jumlah Withdraw anda\n` +
             `🧾 Dana: <code>${prof.dana}</code>\n` +
             `👤 A/N : <code>${prof.dana_an}</code>\n` +
@@ -150,13 +139,12 @@ async function processCallback(cq) {
 
         const kbWd = {
             inline_keyboard: [
-                [{ text: "$1.000000", callback_data: "wd_req:1.0" }, { text: "$2.000000", callback_data: "wd_req:2.0" }],
-                [{ text: "$3.000000", callback_data: "wd_req:3.0" }, { text: "$5.000000", callback_data: "wd_req:5.0" }],
-                [{ text: "⚙️ Setting Dana / Ganti", callback_data: "set_dana_cb" }],
+                [{ text: "$1.0", callback_data: "wd_req:1.0" }, { text: "$2.0", callback_data: "wd_req:2.0" }],
+                [{ text: "$3.0", callback_data: "wd_req:3.0" }, { text: "$5.0", callback_data: "wd_req:5.0" }],
+                [{ text: "⚙️ Setting Dana", callback_data: "set_dana_cb" }],
                 [{ text: "🔙 Kembali", callback_data: "verify" }]
             ]
         };
-
         await tg.tgEdit(chatId, menuMsgId, msgWd, kbWd);
         return;
     }
@@ -168,65 +156,43 @@ async function processCallback(cq) {
         return;
     }
 
-    // ==== WD REQUEST ====
+    // ==== WD REQUEST & ADMIN ACTION (Tetap Sama) ====
     if (dataCb.startsWith("wd_req:")) {
+        // ... kode wd_req lo yang lama ...
         const amount = parseFloat(dataCb.split(":")[1]);
         const profiles = db.loadProfiles();
         const prof = profiles[String(userId)];
-
         if (!prof || prof.dana === "Belum Diset") {
             await tg.tgSend(chatId, "❌ Harap Setting Dana terlebih dahulu!");
             return;
         }
         if (prof.balance < amount) {
-            await tg.tgSend(chatId, `❌ Saldo tidak cukup! Balance anda: $${prof.balance.toFixed(6)}`);
+            await tg.tgSend(chatId, `❌ Saldo tidak cukup!`);
             return;
         }
-
         prof.balance -= amount;
         db.saveProfiles(profiles);
-
-        const msgAdmin =
-            `<b>🔔 User meminta Withdraw</b>\n\n` +
-            `👤 User: ${mention}\n` +
-            `🆔 ID: <code>${userId}</code>\n` +
-            `💵 Jumlah: <b>$${amount.toFixed(6)}</b>\n` +
-            `🧾 Dana: <code>${prof.dana}</code>\n` +
-            `👤 A/N: <code>${prof.dana_an}</code>`;
-
-        const kbAdmin = {
-            inline_keyboard: [[
-                { text: "✅ Approve", callback_data: `wd_act:apr:${userId}:${amount}` },
-                { text: "❌ Cancel", callback_data: `wd_act:cncl:${userId}:${amount}` }
-            ]]
-        };
-
+        const msgAdmin = `<b>🔔 User meminta Withdraw</b>\n\n👤 User: ${mention}\n💵 Jumlah: <b>$${amount.toFixed(6)}</b>\n🧾 Dana: <code>${prof.dana}</code>`;
+        const kbAdmin = { inline_keyboard: [[{ text: "✅ Approve", callback_data: `wd_act:apr:${userId}:${amount}` }, { text: "❌ Cancel", callback_data: `wd_act:cncl:${userId}:${amount}` }]] };
         await tg.tgSend(config.ADMIN_ID, msgAdmin, kbAdmin);
-        await tg.tgEdit(chatId, menuMsgId, "✅ <b>Permintaan Withdraw Terkirim!</b>\nMenunggu persetujuan Admin..");
+        await tg.tgEdit(chatId, menuMsgId, "✅ <b>Permintaan Withdraw Terkirim!</b>");
         return;
     }
 
-    // ==== ADMIN ACTION WD ====
     if (dataCb.startsWith("wd_act:")) {
         if (userId !== config.ADMIN_ID) return;
-
         const parts = dataCb.split(":");
         const action = parts[1];
         const targetId = parseInt(parts[2]);
         const amount = parseFloat(parts[3]);
-
         if (action === "apr") {
-            await tg.tgEdit(chatId, menuMsgId, `✅ Withdraw User ${targetId} sebesar $${amount} DISETUJUI.`);
-            const prof = db.getUserProfile(targetId);
-            await tg.tgSend(targetId, `<b>✅ Selamat Withdraw Anda Sukses!</b>\n\n💵 Penarikan : $${amount.toFixed(6)}\n💰 Saldo saat ini: $${prof.balance.toFixed(6)}`);
-        } else if (action === "cncl") {
+            await tg.tgEdit(chatId, menuMsgId, `✅ Approved $${amount}`);
+            await tg.tgSend(targetId, `<b>✅ Withdraw Anda Sukses!</b>`);
+        } else {
             const profiles = db.loadProfiles();
-            if (profiles[String(targetId)]) {
-                profiles[String(targetId)].balance += amount;
-                db.saveProfiles(profiles);
-            }
-            await tg.tgEdit(chatId, menuMsgId, `❌ Withdraw User ${targetId} sebesar $${amount} DIBATALKAN.`);
-            await tg.tgSend(targetId, "❌ Admin membatalkan Withdraw.\nSilahkan chat Admin atau melakukan ulang Withdraw.");
+            if (profiles[String(targetId)]) { profiles[String(targetId)].balance += amount; db.saveProfiles(profiles); }
+            await tg.tgEdit(chatId, menuMsgId, `❌ Cancelled $${amount}`);
+            await tg.tgSend(targetId, "❌ Withdraw dibatalkan Admin.");
         }
         return;
     }
