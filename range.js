@@ -10,7 +10,7 @@ const CONFIG = {
     ALLOWED_SERVICES: ['whatsapp', 'facebook'],
     BANNED_COUNTRIES: ['angola'],
     FETCH_INTERVAL: 10000, // Ambil data setiap 10 detik
-    SEND_DELAY: 1500,
+    SEND_DELAY: 2000,
     INLINE_JSON_PATH: path.join(__dirname, 'inline.json')
 };
 
