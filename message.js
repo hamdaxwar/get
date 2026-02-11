@@ -15,7 +15,14 @@ const API_KEY = "M_W17E9N1DD";
 
 const SMC_JSON_FILE = path.join(__dirname, "smc.json");
 const CACHE_FILE = path.join(__dirname, 'otp_cache.json');
-const COUNTRY_EMOJI = require('./country.json');
+
+// Pastikan file country.json ada, kalau tidak ada kita buat fallback
+let COUNTRY_EMOJI = {};
+try {
+    COUNTRY_EMOJI = require('./country.json');
+} catch (e) {
+    console.warn("⚠️ [WARN] country.json tidak ditemukan, menggunakan fallback emoji.");
+}
 
 let totalSent = 0;
 
@@ -24,6 +31,7 @@ let totalSent = 0;
 function escapeHtml(text) {
     if (!text) return "";
     return text
+        .toString()
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
@@ -84,7 +92,7 @@ async function sendTelegram(text, otpCode = null, targetChat = CHAT_ID) {
         payload.reply_markup = {
             inline_keyboard: [
                 [
-                    { text: ` ${otpCode}`, copy_text: { text: otpCode } }, 
+                    { text: `📋 Copy OTP: ${otpCode}`, callback_data: `copy_${otpCode}` }, 
                     { text: "🎭 Owner", url: TELEGRAM_ADMIN_LINK }
                 ],
                 [{ text: "📞 Get Number", url: TELEGRAM_BOT_LINK }]
@@ -93,69 +101,51 @@ async function sendTelegram(text, otpCode = null, targetChat = CHAT_ID) {
     }
 
     try {
-        const res = await axios.post(url, payload);
-        if (res.data.ok) {
-            console.log(`✅ [SUCCESS] Telegram terkirim ke ${targetChat} (OTP: ${otpCode})`);
-        }
+        await axios.post(url, payload);
+        console.log(`✅ [SUCCESS] Telegram terkirim (OTP: ${otpCode})`);
     } catch (e) {
-        if (e.response && e.response.data) {
-            console.error(`❌ [TG ERROR] API Menolak:`, JSON.stringify(e.response.data));
-        } else {
-            console.error(`❌ [TG ERROR] Koneksi: ${e.message}`);
-        }
+        console.error(`❌ [TG ERROR] Gagal kirim pesan ke Telegram.`);
     }
 }
 
 // ================= API MONITORING LOGIC =================
 
 async function startApiMonitor() {
-    console.log("🚀 [SYSTEM] Monitoring API dimulai...");
-    console.log(`🔗 Endpoint: ${API_URL}`);
+    console.log("🚀 [SYSTEM] Monitoring API aktif (Interval: 4 detik)...");
 
-    // Loop tanpa henti
     while (true) {
         try {
-            // Request ke API
             const response = await axios.get(API_URL, {
                 headers: {
                     'mapikey': API_KEY,
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+                    'Accept': 'application/json, text/plain, */*',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Referer': 'https://x.mnitnetwork.com/'
                 },
-                timeout: 10000 // Timeout 10 detik
+                timeout: 15000 
             });
 
-            // Validasi struktur response
             if (response.data && response.data.data && Array.isArray(response.data.data.otps)) {
-                const numbers = response.data.data.otps;
+                const otps = response.data.data.otps;
                 const cache = getCache();
                 let isCacheUpdated = false;
 
-                // Loop setiap item dari API
-                for (const item of numbers) {
-                    
-                    // 1. Format Nomor (Tambah + jika belum ada)
+                for (const item of otps) {
                     let phone = item.number ? item.number.toString() : "";
-                    if (phone && !phone.startsWith('+')) {
-                        phone = "+" + phone;
-                    }
+                    if (phone && !phone.startsWith('+')) phone = "+" + phone;
 
-                    // 2. Ambil Message & OTP Code
                     const fullMessage = item.otp || ""; 
                     const otpCode = extractOtp(fullMessage);
-                    
-                    // Agar lebih akurat kita pakai nid sebagai bagian dari key cache
                     const uniqueId = item.nid || `${otpCode}_${phone}`;
                     
-                    // Cek Cache (logic cek duplikat?)
                     if (otpCode && !cache[uniqueId]) {
-                        
-                        // Tandai sebagai terkirim
                         cache[uniqueId] = { t: new Date().toISOString() };
                         isCacheUpdated = true;
 
-                        // Simpan ke Log File (SMC.json)
+                        // Log ke smc.json
                         const entry = {
-                            service: item.operator || "Unknown Service",
+                            service: item.operator || "Unknown",
                             number: phone,
                             otp: otpCode,
                             full_message: fullMessage,
@@ -168,55 +158,45 @@ async function startApiMonitor() {
                             try { existingLog = JSON.parse(fs.readFileSync(SMC_JSON_FILE)); } catch(e){}
                         }
                         existingLog.push(entry);
-                        // Simpan 100 log terakhir saja
                         fs.writeFileSync(SMC_JSON_FILE, JSON.stringify(existingLog.slice(-100), null, 2));
 
-                        // --- KIRIM TELEGRAM ---
+                        // Kirim Telegram
                         const emoji = getCountryEmoji(item.country || "");
-                        
-                        // Sanitasi HTML
-                        const safePhone = maskPhone(phone);
-                        const safeCountry = escapeHtml(item.country || "Unknown");
-                        const safeService = escapeHtml(item.operator || "Service");
-                        const safeFullMessage = escapeHtml(fullMessage);
-                        
-                        // Format Pesan Telegram
                         const msg = `💭 <b>New Message Received</b>\n\n` +
-                                    `<b>☎️ Number:</b> <code>${safePhone}</code>\n` +
-                                    `<b>🌍 Country:</b> <b>${safeCountry} ${emoji}</b>\n` +
-                                    `<b>⚙️ Service:</b> <b>${safeService}</b>\n\n` +
+                                    `<b>☎️ Number:</b> <code>${maskPhone(phone)}</code>\n` +
+                                    `<b>🌍 Country:</b> <b>${escapeHtml(item.country || "Unknown")} ${emoji}</b>\n` +
+                                    `<b>⚙️ Service:</b> <b>${escapeHtml(item.operator || "Service")}</b>\n\n` +
                                     `🔐 OTP: <code>${otpCode}</code>\n\n` +
                                     `<b>FULL MESSAGE:</b>\n` +
-                                    `<blockquote>${safeFullMessage}</blockquote>\n` +
-                                    `<code>ID: ${item.nid}</code>`; // Tambahan info ID
+                                    `<blockquote>${escapeHtml(fullMessage)}</blockquote>\n` +
+                                    `<code>ID: ${item.nid}</code>`;
                         
                         await sendTelegram(msg, otpCode);
                         totalSent++;
-                        
-                        // Delay ssend TG
-                        await new Promise(r => setTimeout(r, 1000));
+                        await new Promise(r => setTimeout(r, 1000)); // Delay antar pesan TG
                     }
                 }
 
-                if (isCacheUpdated) {
-                    saveToCache(cache);
-                }
-            } else {
-                console.log("⚠️ [API] Format data tidak sesuai atau kosong.");
+                if (isCacheUpdated) saveToCache(cache);
             }
 
         } catch (e) {
             if (e.response) {
-                console.error(`❌ [API ERROR] Status: ${e.response.status} - ${JSON.stringify(e.response.data)}`);
+                if (e.response.status === 403) {
+                    console.error("❌ [403] Terdeteksi Cloudflare! Jeda otomatis 30 detik...");
+                    await new Promise(r => setTimeout(r, 30000));
+                } else {
+                    const errorMsg = typeof e.response.data === 'string' ? "HTML Block" : "JSON Error";
+                    console.error(`❌ [API ERROR] Status: ${e.response.status} (${errorMsg})`);
+                }
             } else {
-                console.error(`❌ [API ERROR] Network: ${e.message}`);
+                console.error(`❌ [API ERROR] Network/Timeout: ${e.message}`);
             }
         }
 
-        // Delay Loop (Jeda 2 detik sebelum request lagi agar tidak kena rate limit)
-        await new Promise(r => setTimeout(r, 2000));
+        // Delay loop utama: 4 Detik
+        await new Promise(r => setTimeout(r, 4000));
     }
 }
 
-// Jalankan Monitor
 startApiMonitor();
